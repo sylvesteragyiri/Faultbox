@@ -5,3 +5,7 @@ docs
 *.db
 *.db-*
 .env
+data
+scripts
+tests
+compose.yaml

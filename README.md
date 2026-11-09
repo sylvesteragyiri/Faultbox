@@ -6,33 +6,58 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 > - **M2:** ingestion. Exceptions and failed jobs are received, grouped into issues and stored.
 > - **M3:** the Laravel package, [`faultbox/laravel`](https://github.com/sylvesteragyiri/faultbox-laravel).
 > - **M4:** the issues dashboard: lists, filters, search, issue detail, and resolve/ignore/reopen.
-> - **Next:** the queue failures view (M5).
+> - **M5:** the queue failures dashboard, failed-job list and detail.
+> - **M6:** email and webhook notifications.
+> - **Next:** operations and hardening (M7).
 >
 > See [docs/roadmap.md](docs/roadmap.md).
 
-## Run with Docker
+## Run with Docker Compose
+
+[compose.yaml](compose.yaml) builds the image from this repository and runs it inside the 128 MB / 0.5 CPU budget, with the database on a named volume.
+
+1. Create a `.env` next to `compose.yaml`:
+
+   ```env
+   FAULTBOX_SECRET=paste-the-output-of: openssl rand -base64 48
+   FAULTBOX_ADMIN_EMAIL=you@example.com
+   FAULTBOX_ADMIN_PASSWORD=a-long-password
+   FAULTBOX_PUBLIC_URL=http://localhost:8080
+   ```
+
+   Keep `FAULTBOX_SECRET` the same forever. It signs CSRF tokens and encrypts stored notification secrets, so changing it makes saved SMTP passwords and webhook secrets unreadable. If you already ran `scripts/dev.ps1` or `scripts/dev.sh`, the `.env` they created works as is.
+
+2. Start it:
+
+   ```bash
+   docker compose up -d --build
+   docker compose ps          # wait for "healthy"
+   docker compose logs -f     # JSON logs
+   ```
+
+3. Open http://localhost:8080 and log in. Go to **Projects → New project**. Copy the API key: it is shown only once.
+
+Other settings:
+- **A different port:** `FAULTBOX_HOST_PORT=9000`.
+- **The published image instead of a local build:** swap `build:` for `image: ghcr.io/sylvesteragyiri/faultbox:edge` in `compose.yaml`.
+
+The data lives in the `faultbox-data` volume. `docker compose down` keeps it; `docker compose down -v` deletes it.
+
+Without Compose, the same thing as one command:
 
 ```bash
-docker run -d --name faultbox -p 8080:8080 \
-  -v faultbox-data:/data \
-  -e FAULTBOX_SECRET="$(openssl rand -base64 48)" \
-  -e FAULTBOX_ADMIN_EMAIL=you@example.com \
-  -e FAULTBOX_ADMIN_PASSWORD='a-long-password' \
-  --memory 128m --cpus 0.5 \
-  ghcr.io/sylvesteragyiri/faultbox:edge
+docker run -d --name faultbox -p 8080:8080   -v faultbox-data:/data   -e FAULTBOX_SECRET="$(openssl rand -base64 48)"   -e FAULTBOX_ADMIN_EMAIL=you@example.com   -e FAULTBOX_ADMIN_PASSWORD='a-long-password'   --memory 128m --cpus 0.5   ghcr.io/sylvesteragyiri/faultbox:edge
 ```
-
-Then open http://localhost:8080 and log in. Keep `FAULTBOX_SECRET` the same across restarts: it signs CSRF tokens and will encrypt stored secrets.
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FAULTBOX_SECRET` | **required** | At least 32 bytes. Keys for CSRF tokens and, later, for encrypting secrets are derived from it. |
+| `FAULTBOX_SECRET` | **required** | At least 32 bytes. Keys for CSRF tokens and for encrypting stored notification secrets are derived from it. Never change it once set. |
 | `FAULTBOX_PORT` | `8080` | HTTP port. |
 | `FAULTBOX_DATABASE_PATH` | `faultbox.db` (`/data/faultbox.db` in Docker) | SQLite file. Created and migrated on startup. |
 | `FAULTBOX_ADMIN_EMAIL` / `FAULTBOX_ADMIN_PASSWORD` | — | Create the first dashboard user, but only while no users exist. The password must be at least 12 characters. |
-| `FAULTBOX_PUBLIC_URL` | taken from the request | External URL shown as the DSN in Laravel setup snippets. |
+| `FAULTBOX_PUBLIC_URL` | taken from the request | External URL, shown as the DSN in Laravel setup snippets and used for links in alert emails and webhooks. |
 | `FAULTBOX_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` and `X-Forwarded-Proto`. Enable only behind your own reverse proxy. |
 | `FAULTBOX_RETENTION_DAYS` | `30` | Event retention. Used from M7. |
 | `FAULTBOX_MAX_EVENT_KB` | `256` | Largest event body after decompression. |
@@ -50,20 +75,92 @@ echo 'password' | faultbox user create --email you@example.com
 faultbox version
 ```
 
-## Laravel setup
+## Connect a Laravel app
+
+The SDK is [`faultbox/laravel`](https://github.com/sylvesteragyiri/faultbox-laravel), for Laravel 12 and 13 on PHP 8.2 or later.
+
+### 1. Install the package
+
+It isn't on Packagist yet, so add it as a Composer repository first.
+
+**From a local checkout** (the `faultbox-laravel` folder next to your app):
 
 ```bash
-composer require faultbox/laravel
+composer config repositories.faultbox path ../faultbox-laravel
+composer require faultbox/laravel:@dev
 ```
 
-Then add these to your `.env`:
+**From Git**, once the repository is pushed:
+
+```bash
+composer config repositories.faultbox vcs https://github.com/sylvesteragyiri/faultbox-laravel
+composer require faultbox/laravel:dev-main
+```
+
+When it's published, plain `composer require faultbox/laravel` is enough. Package auto-discovery registers everything, so no provider needs adding.
+
+> **Docker note for path repositories:** Composer symlinks the package. If your app runs in a container, the `faultbox-laravel` folder must also be mounted inside it, at the same relative path, or the symlink breaks. Either mount the parent folder, or use the Git option.
+
+### 2. Point it at Faultbox
+
+Add to the app's `.env`:
 
 ```env
-FAULTBOX_DSN=https://errors.example.com
-FAULTBOX_API_KEY=fbx_...
+FAULTBOX_DSN=http://localhost:8080
+FAULTBOX_API_KEY=fbx_...                 # from Projects → New project
+FAULTBOX_RELEASE=1.4.2                   # optional: git tag or commit SHA
+# FAULTBOX_ENVIRONMENT=production        # defaults to APP_ENV
 ```
 
-Run `php artisan faultbox:test` to check it works. See the package README for queue options, context and `Faultbox::fake()`.
+`FAULTBOX_DSN` is the address **the Laravel app** uses to reach Faultbox, which depends on where each one runs:
+
+| Laravel runs | Faultbox runs | `FAULTBOX_DSN` |
+|---|---|---|
+| On your machine (`php artisan serve`, Herd, Valet) | Compose on the same machine | `http://localhost:8080` |
+| In Docker (Sail or its own Compose project) | Compose on the same machine | `http://faultbox:8080`, after joining the `faultbox` network (below) |
+| In Docker, without joining the network | Compose on the same machine | `http://host.docker.internal:8080` (on Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]`) |
+| A production server | Behind your reverse proxy | `https://errors.example.com` (also set `FAULTBOX_PUBLIC_URL` and `FAULTBOX_TRUST_PROXY=true` on Faultbox) |
+
+To join the network from the app's `docker-compose.yml` (for Sail, the `laravel.test` service):
+
+```yaml
+services:
+  laravel.test:          # your app service
+    networks:
+      - sail             # keep your existing network
+      - faultbox
+networks:
+  faultbox:
+    external: true       # created by Faultbox's compose.yaml
+```
+
+### 3. Check it
+
+```bash
+php artisan config:clear
+php artisan faultbox:test
+```
+
+This sends a test exception. If it fails, it says why: the server can't be reached (check `FAULTBOX_DSN`), the key was rejected, the project is disabled, or the event was refused (for example, an environment the project doesn't allow). Then trigger a real error and watch it appear under **Issues**. Failed queue jobs appear under **Queue Failures** with no changes to your jobs.
+
+To get alerts, add a channel under **Notifications**.
+
+### Laravel Octane
+
+Octane is supported. Under Octane one worker serves many requests, so the SDK listens to Octane's `RequestReceived` and `RequestTerminated` events:
+- it resets the context, user and correlation ID at the start of each request; context set in a service provider is kept;
+- it reads the request and the logged-in user from that request's sandbox;
+- it sends events after the response.
+
+There's nothing to configure. After installing or updating the package, restart the workers so they load it:
+
+```bash
+php artisan octane:reload
+```
+
+Queue workers (`queue:work`, Horizon) are separate processes and also need a restart (`php artisan queue:restart` or `horizon:terminate`).
+
+See the package README for queue options, manual reporting, context and `Faultbox::fake()` in tests.
 
 ## HTTP endpoints
 

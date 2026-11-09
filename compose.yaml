@@ -1,0 +1,61 @@
+# Faultbox with Docker Compose.
+#
+#   1. Set the variables below in a .env file next to this one (or in your
+#      shell). FAULTBOX_SECRET must stay the same across restarts: it signs
+#      CSRF tokens and encrypts stored notification secrets.
+#
+#        FAULTBOX_SECRET=$(openssl rand -base64 48)
+#        FAULTBOX_ADMIN_EMAIL=you@example.com
+#        FAULTBOX_ADMIN_PASSWORD=a-long-password
+#        FAULTBOX_PUBLIC_URL=http://localhost:8080
+#
+#   2. docker compose up -d --build
+#   3. Open http://localhost:8080, log in, create a project, copy its API key.
+#
+# Laravel apps in other Compose projects can reach Faultbox at
+# http://faultbox:8080 by joining the "faultbox" network (see README.md).
+
+services:
+  faultbox:
+    build:
+      context: .
+      args:
+        VERSION: ${FAULTBOX_VERSION:-dev}
+    # Or use the published image instead of building:
+    # image: ghcr.io/sylvesteragyiri/faultbox:edge
+    image: faultbox:local
+    container_name: faultbox
+    restart: unless-stopped
+    ports:
+      - "${FAULTBOX_HOST_PORT:-8080}:8080"
+    environment:
+      FAULTBOX_SECRET: ${FAULTBOX_SECRET:?set FAULTBOX_SECRET (at least 32 bytes), e.g. openssl rand -base64 48}
+      FAULTBOX_ADMIN_EMAIL: ${FAULTBOX_ADMIN_EMAIL:-}
+      FAULTBOX_ADMIN_PASSWORD: ${FAULTBOX_ADMIN_PASSWORD:-}
+      # The address Laravel apps and alert links use. Set it to your public
+      # URL (https://errors.example.com) when deployed.
+      FAULTBOX_PUBLIC_URL: ${FAULTBOX_PUBLIC_URL:-http://localhost:8080}
+      # Only behind your own reverse proxy (Nginx, Traefik, Caddy).
+      FAULTBOX_TRUST_PROXY: ${FAULTBOX_TRUST_PROXY:-false}
+      FAULTBOX_RETENTION_DAYS: ${FAULTBOX_RETENTION_DAYS:-30}
+      FAULTBOX_LOG_LEVEL: ${FAULTBOX_LOG_LEVEL:-info}
+      # Fixed inside the container; the database lives on the volume.
+      FAULTBOX_PORT: "8080"
+      FAULTBOX_DATABASE_PATH: /data/faultbox.db
+    volumes:
+      - faultbox-data:/data
+    # The resource budget Faultbox is built and load-tested for (PRD §9).
+    # The image sets GOMEMLIMIT=96MiB; raise both together if you change this.
+    mem_limit: 128m
+    cpus: 0.5
+    networks:
+      - faultbox
+    # The image's HEALTHCHECK probes /ready (database answering, queue not full).
+
+volumes:
+  faultbox-data:
+    name: faultbox-data
+
+networks:
+  faultbox:
+    name: faultbox
