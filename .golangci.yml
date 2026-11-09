@@ -20,6 +20,10 @@ linters:
       - path: ^tests/
         linters: [gosec]
         text: "G704"
+      # Seeded test data is deliberately reproducible, not secret.
+      - path: ^tests/
+        linters: [gosec]
+        text: "G404|G115"
 
 formatters:
   enable:

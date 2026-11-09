@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -87,8 +88,9 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("POST /projects/{id}", h.projectUpdate)
 	authed.HandleFunc("POST /projects/{id}/status", h.projectSetStatus)
 	authed.HandleFunc("POST /projects/{id}/key", h.projectRotateKey)
-	authed.HandleFunc("GET /issues", h.comingSoon("issues", "Issues", "M4",
-		"Grouped exceptions from your Laravel apps will appear here once the ingestion pipeline (M2) and issue views (M4) land."))
+	authed.HandleFunc("GET /issues", h.issueList)
+	authed.HandleFunc("GET /issues/{id}", h.issueShow)
+	authed.HandleFunc("POST /issues/{id}/status", h.issueSetStatus)
 	authed.HandleFunc("GET /queue-failures", h.comingSoon("queue", "Queue Failures", "M5",
 		"Failed jobs that exhaust their retries will be listed here, separately from request exceptions."))
 	authed.HandleFunc("GET /notifications", h.comingSoon("notifications", "Notifications", "M6",
@@ -117,7 +119,7 @@ func cacheStatic(next http.Handler) http.Handler {
 
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
-	"coming_soon", "settings", "error",
+	"coming_soon", "settings", "error", "issues", "issue",
 }
 
 func (h *Handler) parseTemplates() error {
@@ -132,6 +134,36 @@ func (h *Handler) parseTemplates() error {
 		"isoTime": func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"join":    strings.Join,
 		"bytes":   humanBytes,
+		"compact": compact,
+		"add":     func(a, b int) int { return a + b },
+		"sub":     func(a, b int) int { return a - b },
+		"percent": func(part, total int64) int64 {
+			if total <= 0 {
+				return 0
+			}
+			return min(100, (part*100+total/2)/total)
+		},
+		"dict": func(kv ...any) map[string]any {
+			m := make(map[string]any, len(kv)/2)
+			for i := 0; i+1 < len(kv); i += 2 {
+				if k, ok := kv[i].(string); ok {
+					m[k] = kv[i+1]
+				}
+			}
+			return m
+		},
+		"truncate": func(s string, n int) string {
+			if r := []rune(s); len(r) > n {
+				return string(r[:n]) + "…"
+			}
+			return s
+		},
+		"pathOf": func(raw string) string {
+			if u, err := url.Parse(raw); err == nil && u.Path != "" {
+				return u.Path
+			}
+			return raw
+		},
 	}
 	h.pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {
@@ -211,7 +243,28 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	stats, err := h.store.Stats(r.Context())
+	ctx := r.Context()
+	stats, err := h.store.Stats(ctx)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	trend, err := h.store.Trend(ctx, 30, 0)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	recent, err := h.store.ListIssues(ctx, store.IssueFilter{Status: store.IssueUnresolved, PerPage: 6})
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	failures, err := h.store.RecentQueueFailures(ctx, 6)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	names, _, err := h.projectNames(r)
 	if err != nil {
 		h.serverError(w, err)
 		return
@@ -220,6 +273,9 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		"ActiveProjects":   active,
 		"DisabledProjects": disabled,
 		"Stats":            stats,
+		"Chart":            newBarChart("Events per day, last 30 days", trend, []string{"Errors", "Failed jobs"}),
+		"Recent":           h.issueRows(names, recent.Issues),
+		"Failures":         failures,
 	}))
 }
 

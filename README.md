@@ -4,7 +4,8 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 > **Status:** early development.
 > - **M1:** the dashboard, projects, API keys and health probes.
 > - **M2:** ingestion. Exceptions and failed jobs are received, grouped into issues and stored.
-> - **Next:** the Laravel package (M3) and the issue views (M4).
+> - **M3:** the Laravel package, [`faultbox/laravel`](https://github.com/sylvesteragyiri/faultbox-laravel).
+> - **Next:** the issue views (M4).
 >
 > See [docs/roadmap.md](docs/roadmap.md).
 
@@ -47,6 +48,21 @@ faultbox healthcheck                          # exit 0 if /ready is OK (used by 
 echo 'password' | faultbox user create --email you@example.com
 faultbox version
 ```
+
+## Laravel setup
+
+```bash
+composer require faultbox/laravel
+```
+
+Then add these to your `.env`:
+
+```env
+FAULTBOX_DSN=https://errors.example.com
+FAULTBOX_API_KEY=fbx_...
+```
+
+Run `php artisan faultbox:test` to check it works. See the package README for queue options, context and `Faultbox::fake()`.
 
 ## HTTP endpoints
 

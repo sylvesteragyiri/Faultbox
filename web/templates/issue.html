@@ -1,0 +1,193 @@
+{{define "content"}}
+{{$i := .Data.Issue}}
+{{$v := .Data.View}}
+<header class="page-head issue-head">
+  <div class="issue-head-main">
+    <p class="crumbs"><a href="/issues">Issues</a> / <a href="/issues?project={{.Data.Project.ID}}&amp;status=all">{{.Data.Project.Name}}</a></p>
+    <h1 class="issue-heading">{{if $i.JobName}}{{$i.JobName}}{{else}}{{$i.ExceptionType}}{{end}}</h1>
+    <p class="issue-lead">{{$i.Message}}</p>
+    <p class="muted small mono">{{if $i.JobName}}{{$i.ExceptionType}} · {{end}}{{$i.Culprit}}</p>
+  </div>
+  {{template "issue_status" .}}
+</header>
+
+<section class="stats" aria-label="Issue summary">
+  <div class="stat card"><span class="stat-label">Events</span><span class="stat-value">{{compact $i.OccurrenceCount}}</span></div>
+  <div class="stat card"><span class="stat-label">First seen</span><span class="stat-value stat-sm">{{timeago $i.FirstSeenAt}}</span><span class="stat-note">{{datetime $i.FirstSeenAt}}</span></div>
+  <div class="stat card"><span class="stat-label">Last seen</span><span class="stat-value stat-sm">{{timeago $i.LastSeenAt}}</span><span class="stat-note">{{datetime $i.LastSeenAt}}</span></div>
+  <div class="stat card"><span class="stat-label">Releases</span><span class="stat-value stat-sm mono">{{if $i.FirstRelease}}{{$i.FirstRelease}}{{else}}—{{end}}</span><span class="stat-note">{{if $i.LastRelease}}latest {{$i.LastRelease}}{{else}}no release reported{{end}}</span></div>
+</section>
+
+<section class="card">
+  <h2>Events per day</h2>
+  {{template "bar_chart" .Data.Chart}}
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Environments</h2>
+    {{template "breakdown" (dict "Rows" .Data.Envs "Total" $i.OccurrenceCount "Empty" "No environment data.")}}
+  </section>
+  <section class="card">
+    <h2>Releases</h2>
+    {{template "breakdown" (dict "Rows" .Data.Releases "Total" $i.OccurrenceCount "Empty" "Events didn't include a release. Set FAULTBOX_RELEASE in the app.")}}
+  </section>
+</div>
+
+<section class="card" id="event">
+  <div class="section-head">
+    <h2>{{if $v.IsSample}}Representative event{{else}}Event{{end}}</h2>
+    {{with $v.Event}}
+    <p class="muted small">
+      <span class="mono">{{truncate .UUID 13}}</span> ·
+      <time datetime="{{isoTime .OccurredAt}}" title="{{datetime .OccurredAt}}">{{timeago .OccurredAt}}</time> ·
+      {{.Environment}}{{if .Release}} · {{.Release}}{{end}}{{if .CorrelationID}} · <span class="mono" title="Correlation ID">{{.CorrelationID}}</span>{{end}}
+    </p>
+    {{end}}
+  </div>
+  {{if $v.IsSample}}<p class="alert alert-warn">The individual events for this issue have passed the retention period. This is the stored representative trace.</p>{{end}}
+
+  <h3>Exception</h3>
+  <p class="exception-line"><strong class="mono">{{with $v.Event}}{{.ExceptionType}}{{else}}{{$i.ExceptionType}}{{end}}</strong></p>
+  <pre class="exception-message">{{with $v.Event}}{{.Message}}{{else}}{{$i.Message}}{{end}}</pre>
+
+  <h3>Stack trace</h3>
+  {{if $v.Trace.Empty}}
+    <p class="muted">No stack trace was sent with this event.</p>
+  {{else}}
+  <ol class="trace">
+    {{range $v.Trace.Groups}}
+      {{if .Collapsed}}
+      <li class="trace-group">
+        <details>
+          <summary>{{len .Frames}} framework frame{{if gt (len .Frames) 1}}s{{end}}</summary>
+          <ol>{{range .Frames}}{{template "frame" .}}{{end}}</ol>
+        </details>
+      </li>
+      {{else}}
+        {{range .Frames}}{{template "frame" .}}{{end}}
+      {{end}}
+    {{end}}
+  </ol>
+  {{if $v.Trace.Omitted}}<p class="muted small">{{$v.Trace.Omitted}} frames in the middle of the trace were omitted.</p>{{end}}
+  {{end}}
+
+  {{with $v.Request}}
+  <h3>Request</h3>
+  <p class="mono request-line"><strong>{{.Method}}</strong> {{.URL}}{{if .Status}} <span class="badge {{if ge .Status 500}}badge-off{{end}}">{{.Status}}</span>{{end}}</p>
+  {{if .Route}}<p class="muted small">Route <span class="mono">{{.Route}}</span></p>{{end}}
+  {{if .Headers}}
+  <table class="kv">
+    <tbody>{{range .Headers}}<tr><th class="mono">{{index . 0}}</th><td class="mono">{{index . 1}}</td></tr>{{end}}</tbody>
+  </table>
+  {{end}}
+  {{end}}
+
+  {{if $v.Job}}<h3>Job</h3><pre>{{$v.Job}}</pre>{{end}}
+  {{if $v.User}}<h3>User</h3><pre>{{$v.User}}</pre>{{end}}
+  {{if $v.Context}}<h3>Context</h3><pre>{{$v.Context}}</pre>{{end}}
+</section>
+
+{{if .Data.Failures}}
+<section class="card table-wrap">
+  <h2 class="table-title">Failed jobs</h2>
+  <table>
+    <thead><tr><th>Failed</th><th>Kind</th><th class="num">Attempts</th><th>Queue</th><th class="hide-sm">Connection</th><th class="hide-sm">Job ID</th></tr></thead>
+    <tbody>
+    {{range .Data.Failures}}
+      <tr>
+        <td class="nowrap"><time datetime="{{isoTime .FailedAt}}" title="{{datetime .FailedAt}}">{{timeago .FailedAt}}</time></td>
+        <td><span class="badge {{if eq .Kind "attempt"}}{{else}}badge-off{{end}}">{{.Kind}}</span></td>
+        <td class="num">{{.Attempts}}</td>
+        <td class="mono">{{.Queue}}</td>
+        <td class="hide-sm mono">{{.Connection}}</td>
+        <td class="hide-sm mono small truncate">{{.JobID}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
+{{if .Data.Events}}
+<section class="card table-wrap">
+  <h2 class="table-title">Events</h2>
+  <table>
+    <thead><tr><th>Occurred</th><th>Environment</th><th class="hide-sm">Release</th><th>Request</th></tr></thead>
+    <tbody>
+    {{$sel := ""}}{{with $v.Event}}{{$sel = .UUID}}{{end}}
+    {{range .Data.Events}}
+      <tr {{if eq .UUID $sel}}class="selected"{{end}}>
+        <td class="nowrap"><a href="/issues/{{$i.ID}}?event={{.UUID}}#event"><time datetime="{{isoTime .OccurredAt}}" title="{{datetime .OccurredAt}}">{{timeago .OccurredAt}}</time></a></td>
+        <td>{{.Environment}}</td>
+        <td class="hide-sm mono small">{{.Release}}</td>
+        <td class="mono small truncate">{{if .RequestURL}}{{pathOf .RequestURL}}{{if .HTTPStatus}} · {{.HTTPStatus}}{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <nav class="pager" aria-label="Event pages">
+    <span class="muted small">Newest first</span>
+    <span class="row">
+      {{if gt .Data.EventsAt 0}}<a class="btn" href="/issues/{{$i.ID}}?events={{.Data.EventsPrev}}">Newer</a>{{end}}
+      {{if .Data.MoreEvents}}<a class="btn" href="/issues/{{$i.ID}}?events={{.Data.EventsNext}}">Older</a>{{end}}
+    </span>
+  </nav>
+</section>
+{{end}}
+{{end}}
+
+{{define "issue_status"}}
+{{$i := .Data.Issue}}
+<div class="issue-status" id="issue-status">
+  <p>
+    {{if eq $i.Status "unresolved"}}<span class="badge badge-off">Unresolved</span>
+    {{else if eq $i.Status "resolved"}}<span class="badge badge-ok">Resolved</span> <span class="muted small">{{timeago $i.ResolvedAt}}</span>
+    {{else}}<span class="badge">Ignored</span>{{end}}
+  </p>
+  <div class="row">
+    {{if ne $i.Status "resolved"}}
+    <form method="post" action="/issues/{{$i.ID}}/status" hx-post="/issues/{{$i.ID}}/status" hx-target="#issue-status" hx-swap="outerHTML">
+      {{template "csrf" .CSRF}}<input type="hidden" name="status" value="resolved">
+      <button class="btn btn-primary" type="submit">Resolve</button>
+    </form>
+    {{end}}
+    {{if eq $i.Status "unresolved"}}
+    <form method="post" action="/issues/{{$i.ID}}/status" hx-post="/issues/{{$i.ID}}/status" hx-target="#issue-status" hx-swap="outerHTML">
+      {{template "csrf" .CSRF}}<input type="hidden" name="status" value="ignored">
+      <button class="btn" type="submit">Ignore</button>
+    </form>
+    {{else}}
+    <form method="post" action="/issues/{{$i.ID}}/status" hx-post="/issues/{{$i.ID}}/status" hx-target="#issue-status" hx-swap="outerHTML">
+      {{template "csrf" .CSRF}}<input type="hidden" name="status" value="unresolved">
+      <button class="btn" type="submit">Reopen</button>
+    </form>
+    {{end}}
+  </div>
+  {{if eq $i.Status "resolved"}}<p class="muted small">Reopens automatically if it happens again.</p>{{end}}
+  {{if eq $i.Status "ignored"}}<p class="muted small">New events are still counted.</p>{{end}}
+</div>
+{{end}}
+
+{{define "frame"}}
+<li class="frame {{if .InApp}}frame-app{{end}}">
+  <span class="frame-fn mono">{{if .Function}}{{.Function}}{{else}}<span class="muted">(anonymous)</span>{{end}}</span>
+  {{if .Location}}<span class="frame-loc mono">{{.Location}}</span>{{end}}
+</li>
+{{end}}
+
+{{define "breakdown"}}
+{{if .Rows}}
+<ul class="breakdown">
+  {{range .Rows}}
+  <li>
+    <span class="breakdown-name mono">{{.Name}}</span>
+    <svg class="breakdown-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6"></rect><rect class="fill" width="{{percent .Count $.Total}}" height="6"></rect></svg>
+    <span class="breakdown-count num">{{compact .Count}} <span class="muted small">{{percent .Count $.Total}}%</span></span>
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="muted">{{.Empty}}</p>
+{{end}}
+{{end}}

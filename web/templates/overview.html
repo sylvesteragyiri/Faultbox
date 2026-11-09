@@ -2,12 +2,10 @@
 <header class="page-head"><h1>Overview</h1></header>
 {{with .Data}}
 <section class="stats" aria-label="Summary">
-  <div class="stat card"><span class="stat-label">Active projects</span><span class="stat-value">{{.ActiveProjects}}</span></div>
-  <div class="stat card"><span class="stat-label">Disabled projects</span><span class="stat-value">{{.DisabledProjects}}</span></div>
-  <div class="stat card"><span class="stat-label">Unresolved issues</span><span class="stat-value">{{.Stats.Unresolved}}</span><span class="stat-note">{{.Stats.Total}} issues in total</span></div>
-  <div class="stat card"><span class="stat-label">New issues today</span><span class="stat-value">{{.Stats.NewToday}}</span><span class="stat-note">First seen since 00:00 UTC</span></div>
-  <div class="stat card"><span class="stat-label">Total events</span><span class="stat-value">{{.Stats.Events}}</span></div>
-  <div class="stat card"><span class="stat-label">Failed jobs</span><span class="stat-value">{{.Stats.QueueFailures}}</span></div>
+  <a class="stat card stat-link" href="/issues"><span class="stat-label">Unresolved issues</span><span class="stat-value">{{compact .Stats.Unresolved}}</span><span class="stat-note">{{compact .Stats.Total}} issues in total</span></a>
+  <a class="stat card stat-link" href="/issues?sort=first_seen&amp;range=24h"><span class="stat-label">New issues today</span><span class="stat-value">{{compact .Stats.NewToday}}</span><span class="stat-note">First seen since 00:00 UTC</span></a>
+  <div class="stat card"><span class="stat-label">Total events</span><span class="stat-value">{{compact .Stats.Events}}</span><span class="stat-note">{{.ActiveProjects}} active project{{if ne .ActiveProjects 1}}s{{end}}</span></div>
+  <a class="stat card stat-link" href="/issues?category=queue_failure&amp;status=all"><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Stats.QueueFailures}}</span><span class="stat-note">Terminal and manual failures</span></a>
 </section>
 
 {{if eq .ActiveProjects 0}}
@@ -16,14 +14,45 @@
   <ol class="steps">
     <li><a href="/projects/new">Create a project</a> for each Laravel application you want to monitor.</li>
     <li>Copy the API key it gives you. It is shown only once.</li>
-    <li>Add the key to the application's <code>.env</code>. The Laravel package arrives in M3.</li>
+    <li>Run <code>composer require faultbox/laravel</code>, add the key to <code>.env</code>, then <code>php artisan faultbox:test</code>.</li>
   </ol>
 </section>
-{{else if eq .Stats.Total 0}}
-<section class="card empty">
-  <h2>No errors yet</h2>
-  <p class="muted">Events sent to <code>POST /api/v1/events</code> and <code>/api/v1/queue-failures</code> are counted here. Issue lists and trends arrive in M4.</p>
-</section>
 {{end}}
+
+<section class="card">
+  <h2>Events per day</h2>
+  {{template "bar_chart" .Chart}}
+</section>
+
+<div class="grid-2">
+  <section class="card">
+    <div class="section-head"><h2>Recent issues</h2><a class="small" href="/issues">All issues</a></div>
+    {{if .Recent}}
+    <ul class="list">
+      {{range .Recent}}
+      <li>
+        <a class="issue-title" href="/issues/{{.ID}}">{{if .JobName}}{{.JobName}}{{else}}{{.ExceptionType}}{{end}}</a>
+        <div class="issue-message">{{truncate .Message 110}}</div>
+        <div class="muted small">{{.ProjectName}} · {{compact .OccurrenceCount}} events · <time datetime="{{isoTime .LastSeenAt}}">{{timeago .LastSeenAt}}</time></div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No unresolved issues.</p>{{end}}
+  </section>
+  <section class="card">
+    <div class="section-head"><h2>Recent failed jobs</h2><a class="small" href="/issues?category=queue_failure&amp;status=all">All failed jobs</a></div>
+    {{if .Failures}}
+    <ul class="list">
+      {{range .Failures}}
+      <li>
+        <a class="issue-title" href="/issues/{{.IssueID}}">{{.JobName}}</a>
+        <div class="issue-message">{{truncate .Message 110}}</div>
+        <div class="muted small">{{if .Queue}}{{.Queue}} · {{end}}{{.Kind}} · <time datetime="{{isoTime .FailedAt}}">{{timeago .FailedAt}}</time></div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No failed jobs.</p>{{end}}
+  </section>
+</div>
 {{end}}
 {{end}}

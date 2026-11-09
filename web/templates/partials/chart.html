@@ -1,0 +1,46 @@
+{{define "bar_chart"}}
+<figure class="chart" data-chart>
+  {{if gt (len .Series) 1}}
+  <ul class="legend" aria-label="Legend">
+    {{range .Series}}<li><span class="swatch {{.Class}}" aria-hidden="true"></span>{{.Name}}</li>{{end}}
+  </ul>
+  {{end}}
+  <div class="chart-plot">
+    <svg class="chart-svg" viewBox="0 0 {{.Width}} {{.Height}}" role="img" aria-label="{{.Label}}">
+      {{range .Ticks}}
+      <line class="grid" x1="{{$.PlotLeft}}" x2="{{$.PlotRight}}" y1="{{.Y}}" y2="{{.Y}}"></line>
+      <text class="tick" x="{{$.TickX}}" y="{{.Y}}" dy="0.32em" text-anchor="end">{{.Label}}</text>
+      {{end}}
+      <line class="baseline" x1="{{.PlotLeft}}" x2="{{.PlotRight}}" y1="{{.PlotBottom}}" y2="{{.PlotBottom}}"></line>
+      {{range .Bars}}
+      <g class="bar" tabindex="0" data-tip="{{.Tip}}" aria-label="{{.Tip}}">
+        <title>{{.Tip}}</title>
+        <rect class="hit" x="{{.HitX}}" y="{{$.PlotTop}}" width="{{.HitW}}" height="{{$.PlotH}}"></rect>
+        {{range .Segments}}<path class="{{.Class}}" d="{{.Path}}"></path>{{end}}
+      </g>
+      {{end}}
+      {{range .XLabels}}
+      <text class="xlabel" x="{{.X}}" y="{{$.Height}}" dy="-6" text-anchor="middle">{{.Label}}</text>
+      {{end}}
+    </svg>
+    <div class="chart-tip" role="status" hidden></div>
+  </div>
+  {{if .Empty}}<p class="muted small chart-note">No events in this period.</p>{{end}}
+  <details class="chart-table">
+    <summary>Show as table</summary>
+    <table>
+      <thead><tr><th>Day</th>{{range .Series}}<th class="num">{{.Name}}</th>{{else}}<th class="num">Events</th>{{end}}</tr></thead>
+      <tbody>
+      {{range .Rows}}<tr><td>{{.Day}}</td>{{range .Values}}<td class="num">{{.}}</td>{{end}}</tr>{{end}}
+      </tbody>
+    </table>
+  </details>
+</figure>
+{{end}}
+
+{{define "sparkline"}}{{if .}}<svg class="spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.}}"></polyline></svg>{{end}}{{end}}
+
+{{define "issue_badges"}}
+{{if eq .Status "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq .Status "ignored"}}<span class="badge">Ignored</span>{{end}}
+{{if eq .Category "queue_failure"}}<span class="badge badge-queue">Queue</span>{{end}}
+{{end}}

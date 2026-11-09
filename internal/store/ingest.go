@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -161,6 +163,11 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 			return res, err
 		}
 		res.NewIssue, res.Status, res.Count = true, IssueUnresolved, 1
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO issues_fts (rowid, exception_type, message, culprit, job_name, request_path) VALUES (?, ?, ?, ?, ?, ?)`,
+			res.IssueID, e.ExceptionType, issueMessage, e.Culprit, jobNameText(e), requestPath(e.RequestURL)); err != nil {
+			return res, err
+		}
 	case err != nil:
 		return res, err
 	default:
@@ -190,6 +197,23 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 		if err != nil {
 			return res, err
 		}
+		if res.Reopened && e.RequestURL != "" {
+			if _, err := tx.ExecContext(ctx, `UPDATE issues_fts SET request_path = ? WHERE rowid = ?`,
+				requestPath(e.RequestURL), res.IssueID); err != nil {
+				return res, err
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO issue_environments (issue_id, environment, first_seen_at, last_seen_at, occurrence_count)
+		 VALUES (?1, ?2, ?3, ?3, 1)
+		 ON CONFLICT (issue_id, environment) DO UPDATE SET
+		   occurrence_count = occurrence_count + 1,
+		   first_seen_at = MIN(first_seen_at, excluded.first_seen_at),
+		   last_seen_at  = MAX(last_seen_at, excluded.last_seen_at)`,
+		res.IssueID, e.Environment, occurred); err != nil {
+		return res, err
 	}
 
 	var httpStatus any
@@ -245,4 +269,24 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 		return res, err
 	}
 	return res, nil
+}
+
+func jobNameText(e *NewEvent) string {
+	if e.Job == nil {
+		return ""
+	}
+	return e.Job.Name
+}
+
+// requestPath keeps the URL path for search: query strings hold IDs and
+// tokens that would only add noise (and data) to the index.
+func requestPath(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if u, err := url.Parse(raw); err == nil && u.Path != "" {
+		return u.Path
+	}
+	path, _, _ := strings.Cut(raw, "?")
+	return path
 }

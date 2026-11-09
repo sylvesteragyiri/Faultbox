@@ -1,0 +1,126 @@
+{{define "content"}}
+{{$f := .Data.Form}}
+<header class="page-head"><h1>Issues</h1></header>
+
+<form class="card filters" method="get" action="/issues"
+      hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="change, input changed delay:300ms from:find input[name=q], submit">
+  <label class="filter-search">Search
+    <input type="search" name="q" value="{{$f.Q}}" placeholder="Exception, message, URL, release or fingerprint" autocomplete="off">
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="unresolved" {{if eq $f.Status "unresolved"}}selected{{end}}>Unresolved</option>
+      <option value="resolved" {{if eq $f.Status "resolved"}}selected{{end}}>Resolved</option>
+      <option value="ignored" {{if eq $f.Status "ignored"}}selected{{end}}>Ignored</option>
+      <option value="all" {{if eq $f.Status "all"}}selected{{end}}>All</option>
+    </select>
+  </label>
+  <label>Kind
+    <select name="category">
+      <option value="errors" {{if eq $f.Category "errors"}}selected{{end}}>Errors</option>
+      <option value="queue_failure" {{if eq $f.Category "queue_failure"}}selected{{end}}>Failed jobs</option>
+      <option value="all" {{if eq $f.Category "all"}}selected{{end}}>All</option>
+    </select>
+  </label>
+  <label>Project
+    <select name="project">
+      <option value="">All projects</option>
+      {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label>Environment
+    <select name="env">
+      <option value="">Any</option>
+      {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>Release
+    <select name="release">
+      <option value="">Any</option>
+      {{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>Exception
+    <select name="type">
+      <option value="">Any</option>
+      {{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{truncate . 60}}</option>{{end}}
+    </select>
+  </label>
+  <label>Seen
+    <select name="range">
+      <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
+      <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
+      <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
+      <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
+      <option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>Last 90 days</option>
+    </select>
+  </label>
+  <label>Sort
+    <select name="sort">
+      <option value="last_seen" {{if eq $f.Sort "last_seen"}}selected{{end}}>Last seen</option>
+      <option value="count" {{if eq $f.Sort "count"}}selected{{end}}>Most events</option>
+      <option value="first_seen" {{if eq $f.Sort "first_seen"}}selected{{end}}>Newest</option>
+    </select>
+  </label>
+  <div class="filter-actions">
+    <button class="btn" type="submit">Apply</button>
+    {{if $f.Filtered}}<a class="btn btn-link" href="/issues">Clear filters</a>{{end}}
+  </div>
+</form>
+
+{{template "issue_results" .}}
+{{end}}
+
+{{define "issue_results"}}
+{{$f := .Data.Form}}
+<section id="issue-results" class="card table-wrap" aria-live="polite">
+  {{if .Data.Rows}}
+  <table class="issues-table">
+    <thead>
+      <tr>
+        <th>Issue</th>
+        <th class="hide-sm">Project</th>
+        <th class="hide-sm">14 days</th>
+        <th class="num"><a href="{{$f.SortURL "count"}}" hx-get="{{$f.SortURL "count"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Events</a></th>
+        <th><a href="{{$f.SortURL "last_seen"}}" hx-get="{{$f.SortURL "last_seen"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Last seen</a></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Data.Rows}}
+      <tr>
+        <td class="issue-cell">
+          <a class="issue-title" href="/issues/{{.ID}}">{{if .JobName}}{{.JobName}}{{else}}{{.ExceptionType}}{{end}}</a>
+          {{template "issue_badges" .}}
+          <div class="issue-message">{{truncate .Message 160}}</div>
+          <div class="muted small mono truncate">{{if .JobName}}{{.ExceptionType}}{{else}}{{.Culprit}}{{end}}</div>
+        </td>
+        <td class="hide-sm muted">{{.ProjectName}}</td>
+        <td class="hide-sm">{{template "sparkline" .Spark}}</td>
+        <td class="num"><strong>{{compact .OccurrenceCount}}</strong></td>
+        <td class="muted nowrap"><time datetime="{{isoTime .LastSeenAt}}" title="{{datetime .LastSeenAt}}">{{timeago .LastSeenAt}}</time>
+          <div class="small">first {{timeago .FirstSeenAt}}</div></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <nav class="pager" aria-label="Pages">
+    <span class="muted small">{{.Data.First}}–{{.Data.Last}}</span>
+    <span class="row">
+      {{if gt .Data.Page.Page 1}}<a class="btn" href="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Previous</a>{{end}}
+      {{if .Data.Page.HasNext}}<a class="btn" href="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Next</a>{{end}}
+    </span>
+  </nav>
+  {{else}}
+  <div class="empty">
+    {{if $f.Filtered}}
+      <h2>No matching issues</h2>
+      <p class="muted">Nothing matches these filters. <a href="/issues">Clear filters</a></p>
+    {{else}}
+      <h2>No unresolved issues</h2>
+      <p class="muted">New errors from your Laravel apps appear here as they arrive.</p>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+{{end}}
