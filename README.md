@@ -216,6 +216,15 @@ go test ./...                # see tests/README.md for the suites
 golangci-lint run ./...
 ```
 
+To fill a local database with demo data, run the seeder from the repo root. It adds issues and queue failures, plus app notifications, mail, artisan command runs and cache totals, for three demo projects over 28 days. It can run while the server is up; restart the server first if it has new migrations.
+
+```bash
+go run ./scripts/seed                        # data/faultbox.db: ~1,500 events, plus telemetry
+go run ./scripts/seed -events 0              # telemetry only
+go run ./scripts/seed -telemetry=false       # events only
+go run ./scripts/seed -telemetry-scale 5     # five times the notifications, mail, commands and cache
+```
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).

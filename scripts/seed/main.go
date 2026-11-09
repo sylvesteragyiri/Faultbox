@@ -8,6 +8,13 @@
 //	go run ./scripts/seed                    # data/faultbox.db, ~1,500 events over 28 days
 //	go run ./scripts/seed -events 5000 -days 14
 //	go run ./scripts/seed -db path/to/other.db
+//	go run ./scripts/seed -events 0          # telemetry only
+//	go run ./scripts/seed -telemetry=false   # events only
+//
+// Besides events, it adds telemetry for the same projects and days: Laravel
+// notifications, mail, artisan command runs and cache totals, one batch per
+// project and hour, with a short incident in each of the first two projects
+// (telemetry.go). -telemetry-scale multiplies its volume.
 //
 // It is safe to run while the server is up (SQLite WAL). Running it again
 // reuses the demo projects and adds more events.
@@ -143,18 +150,20 @@ func main() {
 	total := flag.Int("events", 1500, "number of events to add")
 	days := flag.Int("days", 28, "spread events over this many days (keep under the retention period)")
 	fixtures := flag.String("fixtures", "tests/fixtures/laravel", "directory of Laravel event fixtures")
+	telemetry := flag.Bool("telemetry", true, "also seed notifications, mail, commands and cache")
+	scale := flag.Float64("telemetry-scale", 1, "multiply the telemetry volume")
 	flag.Parse()
 
-	if err := run(*dbPath, *fixtures, *total, *days); err != nil {
+	if err := run(*dbPath, *fixtures, *total, *days, *telemetry, *scale); err != nil {
 		fmt.Fprintln(os.Stderr, "seed:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dbPath, fixtureDir string, total, days int) error {
+func run(dbPath, fixtureDir string, total, days int, telemetry bool, scale float64) error {
 	ctx := context.Background()
-	if days < 1 || total < 1 {
-		return fmt.Errorf("-events and -days must be positive")
+	if days < 1 || total < 0 || scale <= 0 {
+		return fmt.Errorf("-days and -telemetry-scale must be positive, -events zero or more")
 	}
 	st, err := store.Open(ctx, dbPath)
 	if err != nil {
@@ -229,6 +238,9 @@ func run(dbPath, fixtureDir string, total, days int) error {
 	started := time.Now()
 	lastReport := started
 	for i, is := range list {
+		if total == 0 {
+			break
+		}
 		n := max(1, int(math.Round(float64(total)*is.weight/weights)))
 		p := projects[is.project]
 		for j := range n {
@@ -310,6 +322,13 @@ func run(dbPath, fixtureDir string, total, days int) error {
 
 	fmt.Printf("Seeded %d events into %d issues across %d projects (%d days) in %s\n",
 		metrics.Processed.Load(), len(list), len(projects), days, dbPath)
+	if telemetry {
+		batches, items, err := seedTelemetry(ctx, st, rng, days, scale)
+		if err != nil {
+			return fmt.Errorf("seed telemetry: %w", err)
+		}
+		fmt.Printf("Seeded %d telemetry batches (%d notifications, mails, command runs and cache totals)\n", batches, items)
+	}
 	if f := metrics.Failed.Load(); f > 0 || rejected > 0 {
 		fmt.Printf("  %d failed to store, %d rejected by validation\n", f, rejected)
 	}
