@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ const (
 	MaxProjectNameLen     = 100
 	MaxEnvironments       = 20
 	MaxEnvironmentNameLen = 64
+	MaxQueueURLLen        = 500
 )
 
 // Project is a monitored application (PRD §4.1).
@@ -35,8 +37,11 @@ type Project struct {
 	Status          string
 	Environments    []string
 	LastEventAt     time.Time // zero until the first event arrives (M2)
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// QueueDashboardURL links to the application's own queue tool, such as
+	// Horizon. Empty when not set (M5).
+	QueueDashboardURL string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // Active reports whether the project accepts events.
@@ -93,6 +98,23 @@ func validEnvRune(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-'
 }
 
+// NormalizeQueueURL checks the optional link to a project's queue tool. It
+// must be an absolute http or https URL; empty clears it.
+func NormalizeQueueURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	if len(raw) > MaxQueueURLLen {
+		return "", invalid("The queue dashboard link must be at most %d characters.", MaxQueueURLLen)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", invalid("The queue dashboard link must be a full http:// or https:// URL, such as https://app.example.com/horizon.")
+	}
+	return u.String(), nil
+}
+
 // Slugify turns a name into a URL-safe identifier, e.g. "My App!" → "my-app".
 func Slugify(name string) string {
 	var b strings.Builder
@@ -117,7 +139,7 @@ func Slugify(name string) string {
 	return slug
 }
 
-const projectColumns = `id, name, slug, api_key_hint, api_key_rotated_at, status, last_event_at, created_at, updated_at`
+const projectColumns = `id, name, slug, api_key_hint, api_key_rotated_at, status, last_event_at, created_at, updated_at, queue_dashboard_url`
 
 func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 	var (
@@ -125,7 +147,7 @@ func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 		rotated, created, updated int64
 		lastEvent                 sql.NullInt64
 	)
-	err := row.Scan(&p.ID, &p.Name, &p.Slug, &p.APIKeyHint, &rotated, &p.Status, &lastEvent, &created, &updated)
+	err := row.Scan(&p.ID, &p.Name, &p.Slug, &p.APIKeyHint, &rotated, &p.Status, &lastEvent, &created, &updated, &p.QueueDashboardURL)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Project{}, ErrNotFound
 	}
@@ -279,11 +301,13 @@ func (s *Store) CountProjects(ctx context.Context) (active, disabled int, err er
 	return active, disabled, err
 }
 
-// UpdateProject changes a project's name and environments.
-func (s *Store) UpdateProject(ctx context.Context, id int64, name string, envs []string) error {
+// UpdateProject changes a project's name, environments and queue tool link.
+// Callers validate queueURL with NormalizeQueueURL.
+func (s *Store) UpdateProject(ctx context.Context, id int64, name string, envs []string, queueURL string) error {
 	now := s.nowMs()
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE projects SET name = ?, updated_at = ? WHERE id = ?`, name, now, id)
+		res, err := tx.ExecContext(ctx, `UPDATE projects SET name = ?, queue_dashboard_url = ?, updated_at = ? WHERE id = ?`,
+			name, queueURL, now, id)
 		if err != nil {
 			return err
 		}

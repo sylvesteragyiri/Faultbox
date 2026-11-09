@@ -5,7 +5,7 @@
   <a class="stat card stat-link" href="/issues"><span class="stat-label">Unresolved issues</span><span class="stat-value">{{compact .Stats.Unresolved}}</span><span class="stat-note">{{compact .Stats.Total}} issues in total</span></a>
   <a class="stat card stat-link" href="/issues?sort=first_seen&amp;range=24h"><span class="stat-label">New issues today</span><span class="stat-value">{{compact .Stats.NewToday}}</span><span class="stat-note">First seen since 00:00 UTC</span></a>
   <div class="stat card"><span class="stat-label">Total events</span><span class="stat-value">{{compact .Stats.Events}}</span><span class="stat-note">{{.ActiveProjects}} active project{{if ne .ActiveProjects 1}}s{{end}}</span></div>
-  <a class="stat card stat-link" href="/issues?category=queue_failure&amp;status=all"><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Stats.QueueFailures}}</span><span class="stat-note">Terminal and manual failures</span></a>
+  <a class="stat card stat-link" href="/queue-failures"><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Stats.QueueFailures}}</span><span class="stat-note">Terminal and manual failures</span></a>
 </section>
 
 {{if eq .ActiveProjects 0}}
@@ -40,12 +40,12 @@
     {{else}}<p class="muted">No unresolved issues.</p>{{end}}
   </section>
   <section class="card">
-    <div class="section-head"><h2>Recent failed jobs</h2><a class="small" href="/issues?category=queue_failure&amp;status=all">All failed jobs</a></div>
+    <div class="section-head"><h2>Recent failed jobs</h2><a class="small" href="/queue-failures/jobs">All failed jobs</a></div>
     {{if .Failures}}
     <ul class="list">
       {{range .Failures}}
       <li>
-        <a class="issue-title" href="/issues/{{.IssueID}}">{{.JobName}}</a>
+        <a class="issue-title" href="/queue-failures/{{.EventID}}">{{.JobName}}</a>
         <div class="issue-message">{{truncate .Message 110}}</div>
         <div class="muted small">{{if .Queue}}{{.Queue}} · {{end}}{{.Kind}} · <time datetime="{{isoTime .FailedAt}}">{{timeago .FailedAt}}</time></div>
       </li>

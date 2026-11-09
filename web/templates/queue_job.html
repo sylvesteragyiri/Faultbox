@@ -1,0 +1,81 @@
+{{define "content"}}
+{{$j := .Data.Job}}
+{{$i := .Data.Issue}}
+{{$p := .Data.Project}}
+<header class="page-head issue-head">
+  <div class="issue-head-main">
+    <p class="crumbs"><a href="/queue-failures">Queue Failures</a> / <a href="{{.Data.ListURL}}">Failed jobs</a></p>
+    <h1 class="issue-heading">{{$j.JobName}} {{template "job_kind" $j.Kind}}</h1>
+    <p class="issue-lead">{{$j.Message}}</p>
+    <p class="muted small mono">{{$j.ExceptionType}}</p>
+  </div>
+  {{template "issue_status" .}}
+</header>
+
+<section class="stats" aria-label="Failed job summary">
+  <div class="stat card"><span class="stat-label">Attempts</span><span class="stat-value">{{if $j.Attempts}}{{$j.Attempts}}{{if $j.MaxTries}}<span class="muted stat-of"> / {{$j.MaxTries}}</span>{{end}}{{else}}—{{end}}</span><span class="stat-note">{{if eq $j.Kind "attempt"}}Will be retried{{else if eq $j.Kind "manual"}}Failed manually with $this->fail(){{else}}Out of retries; won't run again{{end}}</span></div>
+  <div class="stat card"><span class="stat-label">Queue</span><span class="stat-value stat-sm mono">{{if $j.Queue}}{{$j.Queue}}{{else}}—{{end}}</span><span class="stat-note">{{if $j.Connection}}on {{$j.Connection}}{{else}}connection not reported{{end}}</span></div>
+  <div class="stat card"><span class="stat-label">Failed</span><span class="stat-value stat-sm">{{timeago $j.FailedAt}}</span><span class="stat-note">{{datetime $j.FailedAt}}</span></div>
+  <a class="stat card stat-link" href="/issues/{{$i.ID}}"><span class="stat-label">Exception group</span><span class="stat-value stat-sm">{{compact $i.OccurrenceCount}} failure{{if ne $i.OccurrenceCount 1}}s{{end}}</span><span class="stat-note">Same job and exception, since {{timeago $i.FirstSeenAt}}</span></a>
+</section>
+
+<div class="grid-2 grid-wide-left">
+  <section class="card">
+    <h2>Exception</h2>
+    <p class="exception-line"><strong class="mono">{{$j.Event.ExceptionType}}</strong></p>
+    <pre class="exception-message">{{$j.Event.Message}}</pre>
+    <h3>Stack trace</h3>
+    {{template "trace" .Data.Trace}}
+  </section>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>Job</h2>
+      {{if $p.QueueDashboardURL}}<a class="btn" href="{{$p.QueueDashboardURL}}" target="_blank" rel="noopener noreferrer">Open queue dashboard ↗</a>{{end}}
+    </div>
+    <dl class="details">
+      <dt>Class</dt><dd class="mono">{{$j.JobName}}</dd>
+      <dt>Job ID</dt><dd class="mono">{{if $j.JobID}}{{$j.JobID}}{{else}}<span class="muted">—</span>{{end}}</dd>
+      <dt>Queue</dt><dd class="mono">{{if $j.Queue}}{{$j.Queue}}{{else}}<span class="muted">—</span>{{end}}</dd>
+      <dt>Connection</dt><dd class="mono">{{if $j.Connection}}{{$j.Connection}}{{else}}<span class="muted">—</span>{{end}}</dd>
+      <dt>Attempts</dt><dd>{{if $j.Attempts}}{{$j.Attempts}}{{if $j.MaxTries}} of {{$j.MaxTries}}{{end}}{{else}}<span class="muted">—</span>{{end}}</dd>
+      {{if .Data.Job.BatchID}}<dt>Batch</dt><dd class="mono">{{.Data.Job.BatchID}}</dd>{{end}}
+      <dt>Project</dt><dd><a href="/projects/{{$p.ID}}">{{$p.Name}}</a></dd>
+      <dt>Environment</dt><dd>{{if $j.Environment}}{{$j.Environment}}{{else}}{{$j.Event.Environment}}{{end}}</dd>
+      <dt>Release</dt><dd class="mono">{{if $j.Event.Release}}{{$j.Event.Release}}{{else}}<span class="muted">—</span>{{end}}</dd>
+      <dt>Failed at</dt><dd><time datetime="{{isoTime $j.FailedAt}}">{{datetime $j.FailedAt}}</time></dd>
+      <dt>Event</dt><dd class="mono small">{{$j.Event.UUID}}</dd>
+    </dl>
+    <h3>Payload metadata</h3>
+    {{if .Data.Payload}}<pre>{{.Data.Payload}}</pre>
+    {{else}}<p class="muted small">No payload metadata was sent. Sensitive keys are removed before storage.</p>{{end}}
+    {{if .Data.User}}<h3>User</h3><pre>{{.Data.User}}</pre>{{end}}
+    {{if .Data.Context}}<h3>Context</h3><pre>{{.Data.Context}}</pre>{{end}}
+    {{if not $p.QueueDashboardURL}}<p class="muted small">Add a queue dashboard link, such as Horizon, in the <a href="/projects/{{$p.ID}}">project settings</a> to jump straight to this job.</p>{{end}}
+  </section>
+</div>
+
+{{if .Data.History}}
+<section class="card table-wrap">
+  <div class="section-head table-title">
+    <h2>Recent failures of this job</h2>
+    <a class="small" href="{{.Data.ListURL}}">All failures of this job</a>
+  </div>
+  <table>
+    <thead><tr><th>Failed</th><th>Kind</th><th class="num">Attempts</th><th class="hide-sm">Queue</th><th class="hide-sm">Environment</th><th>Exception</th></tr></thead>
+    <tbody>
+    {{range .Data.History}}
+      <tr {{if eq .EventID $j.EventID}}class="selected"{{end}}>
+        <td class="nowrap"><a href="/queue-failures/{{.EventID}}"><time datetime="{{isoTime .FailedAt}}" title="{{datetime .FailedAt}}">{{timeago .FailedAt}}</time></a></td>
+        <td>{{template "job_kind" .Kind}}</td>
+        <td class="num">{{if .Attempts}}{{.Attempts}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="hide-sm mono small">{{.Queue}}</td>
+        <td class="hide-sm">{{.Environment}}</td>
+        <td class="mono small truncate">{{.ExceptionType}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+{{end}}

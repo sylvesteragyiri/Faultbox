@@ -13,3 +13,5 @@
   <span class="hint">Separate with commas. Leave empty to accept any environment.</span>
 </label>
 {{end}}
+
+{{define "job_kind"}}{{if eq . "attempt"}}<span class="badge badge-warn" title="A retry failed; the job will run again">Retry</span>{{else if eq . "manual"}}<span class="badge badge-off" title="The job called $this->fail()">Manual</span>{{else}}<span class="badge badge-off" title="Out of retries; the job won't run again">Terminal</span>{{end}}{{end}}

@@ -1,0 +1,118 @@
+{{define "content"}}
+{{$f := .Data.Form}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/queue-failures">Queue Failures</a> /</p>
+    <h1>Failed jobs</h1>
+  </div>
+</header>
+
+<form class="card filters" method="get" action="/queue-failures/jobs"
+      hx-get="/queue-failures/jobs" hx-target="#job-results" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="change, submit">
+  <label>Project
+    <select name="project">
+      <option value="">All projects</option>
+      {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label>Job class
+    <select name="job">
+      <option value="">Any</option>
+      {{range .Data.Facets.JobNames}}<option value="{{.}}" {{if eq $f.Job .}}selected{{end}}>{{truncate . 60}}</option>{{end}}
+      {{if and $f.Job (not (hasString .Data.Facets.JobNames $f.Job))}}<option value="{{$f.Job}}" selected>{{truncate $f.Job 60}}</option>{{end}}
+    </select>
+  </label>
+  <label>Queue
+    <select name="queue">
+      <option value="">Any</option>
+      {{range .Data.Facets.Queues}}<option {{if eq $f.Queue .}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>Connection
+    <select name="connection">
+      <option value="">Any</option>
+      {{range .Data.Facets.Connections}}<option {{if eq $f.Connection .}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>Environment
+    <select name="env">
+      <option value="">Any</option>
+      {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <label>Kind
+    <select name="kind">
+      <option value="failures" {{if eq $f.Kind "failures"}}selected{{end}}>Failures</option>
+      <option value="attempt" {{if eq $f.Kind "attempt"}}selected{{end}}>Failed retries</option>
+      <option value="all" {{if eq $f.Kind "all"}}selected{{end}}>All</option>
+    </select>
+  </label>
+  <label>Failed
+    <select name="range">
+      <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
+      <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
+      <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
+      <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
+    </select>
+  </label>
+  <div class="filter-actions">
+    <button class="btn" type="submit">Apply</button>
+    {{if $f.Filtered}}<a class="btn btn-link" href="/queue-failures/jobs">Clear filters</a>{{end}}
+  </div>
+</form>
+
+{{template "job_results" .}}
+{{end}}
+
+{{define "job_results"}}
+{{$f := .Data.Form}}
+<section id="job-results" class="card table-wrap" aria-live="polite">
+  {{if .Data.Rows}}
+  <table class="issues-table">
+    <thead>
+      <tr>
+        <th>Job</th>
+        <th class="hide-sm">Queue</th>
+        <th class="hide-sm">Environment</th>
+        <th class="num">Attempts</th>
+        <th>Failed</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Data.Rows}}
+      <tr>
+        <td class="issue-cell">
+          <a class="issue-title" href="/queue-failures/{{.EventID}}">{{.JobName}}</a>
+          {{template "job_kind" .Kind}}{{if eq .IssueStatus "resolved"}} <span class="badge badge-ok">Resolved</span>{{else if eq .IssueStatus "ignored"}} <span class="badge">Ignored</span>{{end}}
+          <div class="issue-message">{{truncate .Message 160}}</div>
+          <div class="muted small mono truncate">{{.ExceptionType}} · {{.ProjectName}}</div>
+        </td>
+        <td class="hide-sm mono small">{{if .Queue}}{{.Queue}}{{else}}<span class="muted">—</span>{{end}}{{if .Connection}}<div class="muted">{{.Connection}}</div>{{end}}</td>
+        <td class="hide-sm">{{if .Environment}}{{.Environment}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="num nowrap">{{if .Attempts}}{{.Attempts}}{{if .MaxTries}}<span class="muted"> / {{.MaxTries}}</span>{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="muted nowrap"><time datetime="{{isoTime .FailedAt}}" title="{{datetime .FailedAt}}">{{timeago .FailedAt}}</time></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <nav class="pager" aria-label="Pages">
+    <span class="muted small">{{.Data.First}}–{{.Data.Last}}</span>
+    <span class="row">
+      {{if gt .Data.Page.Page 1}}<a class="btn" href="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-target="#job-results" hx-swap="outerHTML" hx-push-url="true">Previous</a>{{end}}
+      {{if .Data.Page.HasNext}}<a class="btn" href="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-target="#job-results" hx-swap="outerHTML" hx-push-url="true">Next</a>{{end}}
+    </span>
+  </nav>
+  {{else}}
+  <div class="empty">
+    {{if $f.Filtered}}
+      <h2>No matching failed jobs</h2>
+      <p class="muted">Nothing matches these filters. <a href="/queue-failures/jobs">Clear filters</a></p>
+    {{else}}
+      <h2>No failed jobs</h2>
+      <p class="muted">Jobs that fail on your Laravel queue workers appear here, separately from request exceptions.</p>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+{{end}}

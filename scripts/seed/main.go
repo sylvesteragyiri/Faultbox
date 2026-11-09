@@ -16,6 +16,7 @@ package main
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -159,7 +160,7 @@ func run(dbPath, fixtureDir string, total, days int) error {
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	keys, err := ensureProjects(ctx, st)
 	if err != nil {
@@ -169,7 +170,7 @@ func run(dbPath, fixtureDir string, total, days int) error {
 	list := issues()
 	var weights float64
 	for _, is := range list {
-		b, err := os.ReadFile(filepath.Join(fixtureDir, is.fixture+".json"))
+		b, err := os.ReadFile(filepath.Join(fixtureDir, is.fixture+".json")) //nolint:gosec // G304: dev tool reading the fixture directory it was given
 		if err != nil {
 			return fmt.Errorf("read fixture (run from the repo root or pass -fixtures): %w", err)
 		}
@@ -185,7 +186,8 @@ func run(dbPath, fixtureDir string, total, days int) error {
 		weights += is.weight
 	}
 
-	rng := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 7))
+	// Demo-data shape only; nothing here needs to be unpredictable.
+	rng := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 7)) //nolint:gosec // G404: see above
 
 	// Each issue's first event carries a known marker ID, so the result hook
 	// can learn the issue's ID. The map is complete before the processor
@@ -194,7 +196,7 @@ func run(dbPath, fixtureDir string, total, days int) error {
 	byUUID := make(map[string]*issue, len(list))
 	markers := make([]string, len(list))
 	for i, is := range list {
-		markers[i] = newUUID(rng)
+		markers[i] = newUUID()
 		byUUID[markers[i]] = is
 	}
 
@@ -232,7 +234,7 @@ func run(dbPath, fixtureDir string, total, days int) error {
 		for j := range n {
 			at := now.Add(-pickAge(rng, is.shape, period))
 			m := clone(is.tmpl)
-			id := newUUID(rng)
+			id := newUUID()
 			if j == 0 {
 				id = markers[i]
 			}
@@ -250,7 +252,16 @@ func run(dbPath, fixtureDir string, total, days int) error {
 				m["environment"] = "production"
 			}
 			if job, ok := m["job"].(payload); ok {
-				job["id"] = newUUID(rng)
+				job["id"] = newUUID()
+				// Some runs are retries that failed and will run again.
+				if rng.IntN(5) < 2 {
+					tries := 3
+					if mt, ok := job["max_tries"].(float64); ok && mt > 1 {
+						tries = int(mt)
+					}
+					job["kind"] = "attempt"
+					job["attempts"] = 1 + rng.IntN(tries-1)
+				}
 			}
 
 			body, _ := json.Marshal(m)
@@ -426,11 +437,9 @@ func clone(m payload) payload {
 	return out
 }
 
-func newUUID(rng *rand.Rand) string {
+func newUUID() string {
 	var b [16]byte
-	for i := range b {
-		b[i] = byte(rng.UintN(256))
-	}
+	_, _ = crand.Read(b[:])
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])

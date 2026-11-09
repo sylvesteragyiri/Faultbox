@@ -435,7 +435,8 @@ func (h *Handler) issueSetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	h.logger.Info("issue status changed", "issue_id", is.ID, "status", status, "user_id", h.userID(r))
 	if !isHTMX(r) {
-		http.Redirect(w, r, "/issues/"+strconv.FormatInt(is.ID, 10), http.StatusSeeOther)
+		// statusReturnPath only returns /queue-failures/<id> or this issue's path.
+		http.Redirect(w, r, statusReturnPath(r.PostFormValue("next"), is.ID), http.StatusSeeOther) //nolint:gosec // G710: local paths only, see statusReturnPath
 		return
 	}
 	is, err := h.store.Issue(r.Context(), is.ID)
@@ -444,4 +445,16 @@ func (h *Handler) issueSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.render(w, http.StatusOK, "issue", "issue_status", h.newPage(r, is.ExceptionType, "issues", map[string]any{"Issue": is}))
+}
+
+// statusReturnPath is where a plain (non-HTMX) status form returns to: the
+// failed-job page it was sent from, or the issue. Only local queue paths
+// are accepted, so the field can't redirect off-site.
+func statusReturnPath(next string, issueID int64) string {
+	if rest, ok := strings.CutPrefix(next, "/queue-failures/"); ok && rest != "" {
+		if _, err := strconv.ParseInt(rest, 10, 64); err == nil {
+			return next
+		}
+	}
+	return "/issues/" + strconv.FormatInt(issueID, 10)
 }

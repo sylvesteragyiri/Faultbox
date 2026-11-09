@@ -404,6 +404,7 @@ func (s *Store) Trend(ctx context.Context, days int, projectID int64) ([]DayCoun
 
 // RecentFailure is a failed job for the overview list.
 type RecentFailure struct {
+	EventID  int64
 	IssueID  int64
 	JobName  string
 	Queue    string
@@ -415,7 +416,7 @@ type RecentFailure struct {
 // RecentQueueFailures lists the latest failed jobs across projects.
 func (s *Store) RecentQueueFailures(ctx context.Context, limit int) ([]RecentFailure, error) {
 	rows, err := s.reader.QueryContext(ctx,
-		`SELECT q.issue_id, q.job_name, COALESCE(q.queue_name, ''), q.kind, i.message, q.failed_at
+		`SELECT q.event_id, q.issue_id, q.job_name, COALESCE(q.queue_name, ''), q.kind, i.message, q.failed_at
 		   FROM queue_failures q JOIN issues i ON i.id = q.issue_id
 		  WHERE q.kind != 'attempt'
 		  ORDER BY q.failed_at DESC LIMIT ?`, limit)
@@ -429,7 +430,7 @@ func (s *Store) RecentQueueFailures(ctx context.Context, limit int) ([]RecentFai
 			r  RecentFailure
 			at int64
 		)
-		if err := rows.Scan(&r.IssueID, &r.JobName, &r.Queue, &r.Kind, &r.Message, &at); err != nil {
+		if err := rows.Scan(&r.EventID, &r.IssueID, &r.JobName, &r.Queue, &r.Kind, &r.Message, &at); err != nil {
 			return nil, err
 		}
 		r.FailedAt = fromMs(at)

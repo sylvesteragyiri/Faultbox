@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -112,6 +113,12 @@ func TestDashboardPerformance(t *testing.T) {
 		"/issues?page=40",
 		"/issues/" + bigID,
 		"/issues/" + bigID + "?events=200",
+		"/queue-failures",
+		"/queue-failures?project=" + strconv.FormatInt(projectIDs[0], 10),
+		"/queue-failures/jobs",
+		"/queue-failures/jobs?kind=all&page=40",
+		"/queue-failures/jobs?queue=default",
+		"/queue-failures/jobs?job=" + url.QueryEscape(`App\Jobs\Job7`),
 	}
 	var failed []string
 	for _, path := range pages {

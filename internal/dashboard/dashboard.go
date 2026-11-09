@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -93,8 +94,9 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /issues", h.issueList)
 	authed.HandleFunc("GET /issues/{id}", h.issueShow)
 	authed.HandleFunc("POST /issues/{id}/status", h.issueSetStatus)
-	authed.HandleFunc("GET /queue-failures", h.comingSoon("queue", "Queue Failures", "M5",
-		"Failed jobs that exhaust their retries will be listed here, separately from request exceptions."))
+	authed.HandleFunc("GET /queue-failures", h.queueDashboard)
+	authed.HandleFunc("GET /queue-failures/jobs", h.failedJobList)
+	authed.HandleFunc("GET /queue-failures/{id}", h.failedJobShow)
 	authed.HandleFunc("GET /notifications", h.comingSoon("notifications", "Notifications", "M6",
 		"Email and webhook alerts for new issues, regressions and failed jobs."))
 	authed.HandleFunc("GET /settings", h.settings)
@@ -121,7 +123,7 @@ func cacheStatic(next http.Handler) http.Handler {
 
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
-	"coming_soon", "settings", "error", "issues", "issue",
+	"coming_soon", "settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
 }
 
 // assetURL returns a function mapping a static path to its URL with a
@@ -180,11 +182,26 @@ func (h *Handler) parseTemplates() error {
 			}
 			return m
 		},
+		"hasString": slices.Contains[[]string],
 		"truncate": func(s string, n int) string {
 			if r := []rune(s); len(r) > n {
 				return string(r[:n]) + "…"
 			}
 			return s
+		},
+		// classShort and classNamespace split a PHP class name:
+		// App\Jobs\SyncInvoice → "SyncInvoice" and "App\Jobs".
+		"classShort": func(class string) string {
+			if i := strings.LastIndex(class, `\`); i >= 0 {
+				return class[i+1:]
+			}
+			return class
+		},
+		"classNamespace": func(class string) string {
+			if i := strings.LastIndex(class, `\`); i >= 0 {
+				return class[:i]
+			}
+			return ""
 		},
 		"pathOf": func(raw string) string {
 			if u, err := url.Parse(raw); err == nil && u.Path != "" {

@@ -239,11 +239,25 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 	if j := e.Job; j != nil {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO queue_failures (event_id, project_id, issue_id, kind, job_name, job_id, queue_name, connection_name,
-			                             attempts, max_tries, batch_id, payload_metadata, failed_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			                             attempts, max_tries, batch_id, payload_metadata, environment, failed_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			res.EventID, e.ProjectID, res.IssueID, j.Kind, j.Name, nullString(j.ID), nullString(j.Queue),
 			nullString(j.Connection), nullInt(j.Attempts), nullInt(j.MaxTries), nullString(j.BatchID),
-			nullString(j.Payload), occurred); err != nil {
+			nullString(j.Payload), e.Environment, occurred); err != nil {
+			return res, err
+		}
+		failure, attempt := 1, 0
+		if j.Kind == "attempt" {
+			failure, attempt = 0, 1
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO queue_daily_counts (day, project_id, job_name, queue_name, connection_name, failures, attempts, last_failed_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (day, project_id, job_name, queue_name, connection_name) DO UPDATE SET
+			   failures = failures + excluded.failures,
+			   attempts = attempts + excluded.attempts,
+			   last_failed_at = MAX(last_failed_at, excluded.last_failed_at)`,
+			occurred/(24*60*60*1000), e.ProjectID, j.Name, j.Queue, j.Connection, failure, attempt, occurred); err != nil {
 			return res, err
 		}
 	}

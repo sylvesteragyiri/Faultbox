@@ -1,0 +1,99 @@
+{{define "content"}}
+{{with .Data}}
+<header class="page-head">
+  <div>
+    <h1>Queue Failures</h1>
+    <p class="muted small page-sub">Failed jobs from the last 30 days, kept separate from request exceptions.</p>
+  </div>
+  <div class="row">
+    {{if .Projects}}
+    <form class="row" method="get" action="/queue-failures">
+      <label class="sr-only" for="queue-project">Project</label>
+      <select id="queue-project" name="project" class="select-sm">
+        <option value="">All projects</option>
+        {{range .Projects}}<option value="{{.ID}}" {{if eq $.Data.ProjectID (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+      <button class="btn" type="submit">Show</button>
+    </form>
+    {{end}}
+    {{range .ProjectLink}}<a class="btn" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{if gt (len $.Data.ProjectLink) 1}}{{.Project}} queue{{else}}Open queue dashboard{{end}} ↗</a>{{end}}
+    <a class="btn btn-primary" href="{{.ListURL}}">All failed jobs</a>
+  </div>
+</header>
+
+<section class="stats" aria-label="Summary">
+  <a class="stat card stat-link" href="{{.ListURL}}"><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Summary.Failures}}</span><span class="stat-note">Terminal and manual, 30 days</span></a>
+  <div class="stat card"><span class="stat-label">Failing job classes</span><span class="stat-value">{{compact .Summary.JobTypes}}</span><span class="stat-note">Distinct jobs with a failure</span></div>
+  <a class="stat card stat-link" href="/queue-failures/jobs?kind=attempt{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-label">Failed retries</span><span class="stat-value">{{compact .Summary.Attempts}}</span><span class="stat-note">Attempts that will run again</span></a>
+  <a class="stat card stat-link" href="/issues?category=queue_failure{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-label">Unresolved job issues</span><span class="stat-value">{{compact .Summary.Unresolved}}</span><span class="stat-note">Grouped by job and exception</span></a>
+</section>
+
+<section class="card">
+  <h2>Failed jobs per day</h2>
+  {{template "bar_chart" .Chart}}
+</section>
+
+<div class="grid-2">
+  <section class="card table-wrap">
+    <div class="section-head table-title"><h2>Most failing jobs</h2></div>
+    {{if .Top}}
+    <table>
+      <thead><tr><th>Job</th><th class="num">Failed</th><th class="num">Retries</th><th class="hide-sm">Last failed</th></tr></thead>
+      <tbody>
+      {{range .Top}}
+        <tr>
+          <td class="issue-cell"><a class="issue-title" href="/queue-failures/jobs?job={{.JobName}}{{with $.Data.ProjectID}}&amp;project={{.}}{{end}}&amp;kind=all" title="{{.JobName}}">{{classShort .JobName}}</a>
+            <div class="muted small mono truncate">{{classNamespace .JobName}}{{if gt .Issues 1}} · {{.Issues}} exceptions{{end}}</div></td>
+          <td class="num"><strong>{{compact .Failures}}</strong></td>
+          <td class="num muted">{{compact .Attempts}}</td>
+          <td class="muted nowrap hide-sm"><time datetime="{{isoTime .LastFailedAt}}" title="{{datetime .LastFailedAt}}">{{timeago .LastFailedAt}}</time></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<p class="muted table-empty">No failed jobs in the last 30 days.</p>{{end}}
+  </section>
+
+  <section class="card">
+    <div class="section-head"><h2>Recent failures</h2><a class="small" href="{{.ListURL}}">All failed jobs</a></div>
+    {{if .Recent}}
+    <ul class="list">
+      {{range .Recent}}
+      <li>
+        <a class="issue-title" href="/queue-failures/{{.EventID}}">{{.JobName}}</a> {{template "job_kind" .Kind}}
+        <div class="issue-message">{{truncate .Message 110}}</div>
+        <div class="muted small">{{.ProjectName}}{{if .Queue}} · {{.Queue}}{{end}}{{if .Attempts}} · attempt {{.Attempts}}{{end}} · <time datetime="{{isoTime .FailedAt}}">{{timeago .FailedAt}}</time></div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}<p class="muted">No failed jobs yet. Failures from your Laravel queue workers appear here.</p>{{end}}
+  </section>
+</div>
+
+<div class="grid-3">
+  <section class="card">
+    <h2>By queue</h2>
+    {{template "breakdown" (dict "Rows" .Queues "Total" .QueueTotal "Empty" "No failed jobs in the last 30 days.")}}
+  </section>
+  <section class="card">
+    <h2>By connection</h2>
+    {{template "breakdown" (dict "Rows" .Conns "Total" .ConnTotal "Empty" "No failed jobs in the last 30 days.")}}
+  </section>
+  <section class="card">
+    <h2>Failure rate by environment</h2>
+    {{if .Rates}}
+    <ul class="breakdown">
+      {{range .Rates}}
+      <li>
+        <span class="breakdown-name mono">{{.Environment}}</span>
+        <svg class="breakdown-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6"></rect><rect class="fill fill-2" width="{{.Percent}}" height="6"></rect></svg>
+        <span class="breakdown-count num" title="{{.QueueFailures}} of {{.Events}} events">{{.Percent}}%</span>
+      </li>
+      {{end}}
+    </ul>
+    <p class="muted small chart-note">Share of each environment's events that are failed jobs, all time.</p>
+    {{else}}<p class="muted">No events yet.</p>{{end}}
+  </section>
+</div>
+{{end}}
+{{end}}

@@ -26,6 +26,10 @@
   <form method="post" action="/projects/{{$p.ID}}" class="stack narrow">
     {{template "csrf" .CSRF}}
     {{template "project_fields" .Data.Form}}
+    <label>Queue dashboard link
+      <input type="url" name="queue_url" value="{{.Data.Form.QueueURL}}" maxlength="500" placeholder="https://app.example.com/horizon">
+      <span class="hint">Optional. Failed jobs link here, for example to Laravel Horizon. Faultbox doesn't retry jobs itself.</span>
+    </label>
     <div><button class="btn btn-primary" type="submit">Save</button></div>
   </form>
 </section>

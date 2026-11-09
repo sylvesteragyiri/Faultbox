@@ -83,7 +83,7 @@ func TestProjectLifecycle(t *testing.T) {
 		t.Fatalf("lookup by key hash: %+v, %v", got, err)
 	}
 
-	if err := st.UpdateProject(ctx, p.ID, "Billing", []string{"local"}); err != nil {
+	if err := st.UpdateProject(ctx, p.ID, "Billing", []string{"local"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = st.Project(ctx, p.ID)

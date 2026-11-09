@@ -52,25 +52,7 @@
   <pre class="exception-message">{{with $v.Event}}{{.Message}}{{else}}{{$i.Message}}{{end}}</pre>
 
   <h3>Stack trace</h3>
-  {{if $v.Trace.Empty}}
-    <p class="muted">No stack trace was sent with this event.</p>
-  {{else}}
-  <ol class="trace">
-    {{range $v.Trace.Groups}}
-      {{if .Collapsed}}
-      <li class="trace-group">
-        <details>
-          <summary>{{len .Frames}} framework frame{{if gt (len .Frames) 1}}s{{end}}</summary>
-          <ol>{{range .Frames}}{{template "frame" .}}{{end}}</ol>
-        </details>
-      </li>
-      {{else}}
-        {{range .Frames}}{{template "frame" .}}{{end}}
-      {{end}}
-    {{end}}
-  </ol>
-  {{if $v.Trace.Omitted}}<p class="muted small">{{$v.Trace.Omitted}} frames in the middle of the trace were omitted.</p>{{end}}
-  {{end}}
+  {{template "trace" $v.Trace}}
 
   {{with $v.Request}}
   <h3>Request</h3>
@@ -96,8 +78,8 @@
     <tbody>
     {{range .Data.Failures}}
       <tr>
-        <td class="nowrap"><time datetime="{{isoTime .FailedAt}}" title="{{datetime .FailedAt}}">{{timeago .FailedAt}}</time></td>
-        <td><span class="badge {{if eq .Kind "attempt"}}{{else}}badge-off{{end}}">{{.Kind}}</span></td>
+        <td class="nowrap"><a href="/queue-failures/{{.EventID}}"><time datetime="{{isoTime .FailedAt}}" title="{{datetime .FailedAt}}">{{timeago .FailedAt}}</time></a></td>
+        <td>{{template "job_kind" .Kind}}</td>
         <td class="num">{{.Attempts}}</td>
         <td class="mono">{{.Queue}}</td>
         <td class="hide-sm mono">{{.Connection}}</td>
@@ -134,60 +116,5 @@
     </span>
   </nav>
 </section>
-{{end}}
-{{end}}
-
-{{define "issue_status"}}
-{{$i := .Data.Issue}}
-<div class="issue-status" id="issue-status">
-  <p>
-    {{if eq $i.Status "unresolved"}}<span class="badge badge-off">Unresolved</span>
-    {{else if eq $i.Status "resolved"}}<span class="badge badge-ok">Resolved</span> <span class="muted small">{{timeago $i.ResolvedAt}}</span>
-    {{else}}<span class="badge">Ignored</span>{{end}}
-  </p>
-  <div class="row">
-    {{if ne $i.Status "resolved"}}
-    <form method="post" action="/issues/{{$i.ID}}/status" hx-post="/issues/{{$i.ID}}/status" hx-target="#issue-status" hx-swap="outerHTML">
-      {{template "csrf" .CSRF}}<input type="hidden" name="status" value="resolved">
-      <button class="btn btn-primary" type="submit">Resolve</button>
-    </form>
-    {{end}}
-    {{if eq $i.Status "unresolved"}}
-    <form method="post" action="/issues/{{$i.ID}}/status" hx-post="/issues/{{$i.ID}}/status" hx-target="#issue-status" hx-swap="outerHTML">
-      {{template "csrf" .CSRF}}<input type="hidden" name="status" value="ignored">
-      <button class="btn" type="submit">Ignore</button>
-    </form>
-    {{else}}
-    <form method="post" action="/issues/{{$i.ID}}/status" hx-post="/issues/{{$i.ID}}/status" hx-target="#issue-status" hx-swap="outerHTML">
-      {{template "csrf" .CSRF}}<input type="hidden" name="status" value="unresolved">
-      <button class="btn" type="submit">Reopen</button>
-    </form>
-    {{end}}
-  </div>
-  {{if eq $i.Status "resolved"}}<p class="muted small">Reopens automatically if it happens again.</p>{{end}}
-  {{if eq $i.Status "ignored"}}<p class="muted small">New events are still counted.</p>{{end}}
-</div>
-{{end}}
-
-{{define "frame"}}
-<li class="frame {{if .InApp}}frame-app{{end}}">
-  <span class="frame-fn mono">{{if .Function}}{{.Function}}{{else}}<span class="muted">(anonymous)</span>{{end}}</span>
-  {{if .Location}}<span class="frame-loc mono">{{.Location}}</span>{{end}}
-</li>
-{{end}}
-
-{{define "breakdown"}}
-{{if .Rows}}
-<ul class="breakdown">
-  {{range .Rows}}
-  <li>
-    <span class="breakdown-name mono">{{.Name}}</span>
-    <svg class="breakdown-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6"></rect><rect class="fill" width="{{percent .Count $.Total}}" height="6"></rect></svg>
-    <span class="breakdown-count num">{{compact .Count}} <span class="muted small">{{percent .Count $.Total}}%</span></span>
-  </li>
-  {{end}}
-</ul>
-{{else}}
-<p class="muted">{{.Empty}}</p>
 {{end}}
 {{end}}

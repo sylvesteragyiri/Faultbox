@@ -14,6 +14,7 @@ import (
 type projectForm struct {
 	Name         string
 	Environments string
+	QueueURL     string // edit form only
 	Error        string
 }
 
@@ -128,6 +129,7 @@ func (h *Handler) projectShow(w http.ResponseWriter, r *http.Request) {
 	h.renderProject(w, r, http.StatusOK, p, projectForm{
 		Name:         p.Name,
 		Environments: strings.Join(p.Environments, ", "),
+		QueueURL:     p.QueueDashboardURL,
 	}, r.URL.Query().Get("saved") == "1")
 }
 
@@ -145,12 +147,17 @@ func (h *Handler) projectUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	form, name, envs, err := parseProjectForm(r)
+	form.QueueURL = r.PostFormValue("queue_url")
+	var queueURL string
+	if err == nil {
+		queueURL, err = store.NormalizeQueueURL(form.QueueURL)
+	}
 	if msg, ok := validationMessage(err); ok {
 		form.Error = msg
 		h.renderProject(w, r, http.StatusUnprocessableEntity, p, form, false)
 		return
 	}
-	if err := h.store.UpdateProject(r.Context(), p.ID, name, envs); err != nil {
+	if err := h.store.UpdateProject(r.Context(), p.ID, name, envs, queueURL); err != nil {
 		h.serverError(w, err)
 		return
 	}
