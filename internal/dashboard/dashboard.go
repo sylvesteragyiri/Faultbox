@@ -4,6 +4,8 @@ package dashboard
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -122,8 +124,34 @@ var pageNames = []string{
 	"coming_soon", "settings", "error", "issues", "issue",
 }
 
+// assetURL returns a function mapping a static path to its URL with a
+// content-hash query (?v=…). Each file's URL changes whenever its bytes do, so
+// browsers fetch the new copy at once despite the max-age cache header.
+func assetURL() func(string) string {
+	versions := map[string]string{}
+	_ = fs.WalkDir(web.FS, "static", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		b, err := fs.ReadFile(web.FS, p)
+		if err != nil {
+			return nil
+		}
+		sum := sha256.Sum256(b)
+		versions[strings.TrimPrefix(p, "static/")] = hex.EncodeToString(sum[:5])
+		return nil
+	})
+	return func(p string) string {
+		if v, ok := versions[p]; ok {
+			return "/static/" + p + "?v=" + v
+		}
+		return "/static/" + p
+	}
+}
+
 func (h *Handler) parseTemplates() error {
 	funcs := template.FuncMap{
+		"asset":   assetURL(),
 		"timeago": timeAgo,
 		"datetime": func(t time.Time) string {
 			if t.IsZero() {

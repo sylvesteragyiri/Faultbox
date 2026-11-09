@@ -23,4 +23,5 @@ go test ./tests/integration/...   # integration only
 go test ./tests/feature/...       # feature only
 go test -race ./...               # with the race detector (needs cgo; on by default in CI)
 FAULTBOX_LOAD=5000 go test -run TestIngestLoad -v ./tests/integration/   # opt-in load test
+FAULTBOX_SEED=200000 go test -run TestDashboardPerformance -v -timeout 30m ./tests/integration/   # opt-in dashboard timing
 ```

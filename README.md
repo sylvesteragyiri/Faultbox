@@ -5,7 +5,8 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 > - **M1:** the dashboard, projects, API keys and health probes.
 > - **M2:** ingestion. Exceptions and failed jobs are received, grouped into issues and stored.
 > - **M3:** the Laravel package, [`faultbox/laravel`](https://github.com/sylvesteragyiri/faultbox-laravel).
-> - **Next:** the issue views (M4).
+> - **M4:** the issues dashboard: lists, filters, search, issue detail, and resolve/ignore/reopen.
+> - **Next:** the queue failures view (M5).
 >
 > See [docs/roadmap.md](docs/roadmap.md).
 

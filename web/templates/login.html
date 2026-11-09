@@ -1,6 +1,7 @@
 {{define "content"}}
 <div class="login card">
-  <h1 class="login-title"><img src="/static/favicon.svg" alt="" width="28" height="28"> Faultbox</h1>
+  <h1 class="login-title"><img src="{{asset "favicon.svg"}}" alt="" width="28" height="28"> Faultbox</h1>
+  <p class="login-sub">Sign in to your error dashboard</p>
   {{with .Data}}
   {{if .NoUsers}}
     <div class="alert alert-warn">
