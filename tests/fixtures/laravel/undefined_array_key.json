@@ -1,0 +1,15 @@
+{
+  "environment": "production",
+  "exception": {
+    "type": "ErrorException",
+    "message": "Undefined array key \"shipping_address\"",
+    "frames": [
+      {"file": "/var/www/html/app/Services/CheckoutService.php", "line": 112, "function": "buildShipment", "class": "App\\Services\\CheckoutService"},
+      {"file": "/var/www/html/app/Services/CheckoutService.php", "line": 64, "function": "place", "class": "App\\Services\\CheckoutService"},
+      {"file": "/var/www/html/app/Http/Controllers/CheckoutController.php", "line": 29, "function": "store", "class": "App\\Http\\Controllers\\CheckoutController"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php", "line": 256, "function": "handleError", "class": "Illuminate\\Foundation\\Bootstrap\\HandleExceptions"},
+      {"file": "/var/www/html/public/index.php", "line": 17, "function": "handleRequest", "class": "Illuminate\\Foundation\\Application"}
+    ]
+  },
+  "request": {"url": "https://shop.example.com/checkout", "method": "POST", "status_code": 500}
+}

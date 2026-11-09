@@ -41,6 +41,13 @@ type Config struct {
 	// shown to users as the DSN for their Laravel apps. Optional.
 	PublicURL string
 
+	// Ingestion limits (D14).
+	QueueSize     int   // events
+	QueueMaxBytes int64 // estimated bytes across queued events
+	RateLimit     int   // events per second per project
+	RateBurst     int
+	MaxEventBytes int64 // request body after decompression
+
 	// BcryptCost is not read from the environment. Tests lower it.
 	BcryptCost int
 
@@ -60,6 +67,11 @@ func Load(getenv func(string) string) (Config, error) {
 		SessionTTL:      7 * 24 * time.Hour,
 		BcryptCost:      12,
 		ShutdownTimeout: 10 * time.Second,
+		QueueSize:       1000,
+		QueueMaxBytes:   32 << 20,
+		RateLimit:       50,
+		RateBurst:       200,
+		MaxEventBytes:   256 << 10,
 	}
 
 	var errs []error
@@ -83,6 +95,26 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		cfg.RetentionDays = n
 	}
+	intVar := func(name string, minimum, maximum int, dst *int) {
+		v := getenv(name)
+		if v == "" {
+			return
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n < minimum || n > maximum {
+			errs = append(errs, fmt.Errorf("%s: %q must be a whole number from %d to %d", name, v, minimum, maximum))
+			return
+		}
+		*dst = n
+	}
+	intVar("FAULTBOX_QUEUE_SIZE", 1, 1_000_000, &cfg.QueueSize)
+	intVar("FAULTBOX_RATE_LIMIT", 1, 1_000_000, &cfg.RateLimit)
+	intVar("FAULTBOX_RATE_BURST", 1, 1_000_000, &cfg.RateBurst)
+	queueMB, eventKB := int(cfg.QueueMaxBytes>>20), int(cfg.MaxEventBytes>>10)
+	intVar("FAULTBOX_QUEUE_MAX_MB", 1, 4096, &queueMB)
+	intVar("FAULTBOX_MAX_EVENT_KB", 16, 10240, &eventKB)
+	cfg.QueueMaxBytes, cfg.MaxEventBytes = int64(queueMB)<<20, int64(eventKB)<<10
+
 	if v := getenv("FAULTBOX_SHUTDOWN_TIMEOUT"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d <= 0 {
@@ -105,6 +137,9 @@ func (c Config) Validate() error {
 	}
 	if p, err := strconv.Atoi(c.Port); err != nil || p < 1 || p > 65535 {
 		errs = append(errs, fmt.Errorf("FAULTBOX_PORT: %q is not a valid port", c.Port))
+	}
+	if c.QueueSize < 1 || c.QueueMaxBytes < 1 || c.RateLimit < 1 || c.RateBurst < 1 || c.MaxEventBytes < 1 {
+		errs = append(errs, errors.New("queue size, queue bytes, rate limit, rate burst and max event size must all be positive"))
 	}
 	if c.DatabasePath == "" {
 		errs = append(errs, errors.New("FAULTBOX_DATABASE_PATH must not be empty"))

@@ -60,7 +60,12 @@ func Config(t *testing.T) config.Config {
 		RetentionDays:   30,
 		SessionTTL:      7 * 24 * time.Hour,
 		BcryptCost:      bcrypt.MinCost,
-		ShutdownTimeout: time.Second,
+		ShutdownTimeout: 5 * time.Second,
+		QueueSize:       1000,
+		QueueMaxBytes:   32 << 20,
+		RateLimit:       10_000,
+		RateBurst:       10_000,
+		MaxEventBytes:   256 << 10,
 	}
 }
 

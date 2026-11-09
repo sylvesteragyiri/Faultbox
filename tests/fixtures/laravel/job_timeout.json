@@ -1,0 +1,29 @@
+{
+  "environment": "production",
+  "release": "2026.11.1",
+  "exception": {
+    "type": "GuzzleHttp\\Exception\\ConnectException",
+    "message": "cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received (see https://curl.haxx.se/libcurl/c/libcurl-errors.html) for https://api.xero.com/api.xro/2.0/Invoices/INV-0042",
+    "frames": [
+      {"file": "/var/www/html/vendor/guzzlehttp/guzzle/src/Handler/CurlFactory.php", "line": 275, "function": "createRejection", "class": "GuzzleHttp\\Handler\\CurlFactory"},
+      {"file": "/var/www/html/vendor/guzzlehttp/guzzle/src/Handler/CurlHandler.php", "line": 44, "function": "finish", "class": "GuzzleHttp\\Handler\\CurlFactory"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php", "line": 932, "function": "send", "class": "Illuminate\\Http\\Client\\PendingRequest"},
+      {"file": "/var/www/html/app/Services/Xero/InvoiceClient.php", "line": 77, "function": "push", "class": "App\\Services\\Xero\\InvoiceClient"},
+      {"file": "/var/www/html/app/Jobs/SyncInvoiceToXero.php", "line": 41, "function": "handle", "class": "App\\Jobs\\SyncInvoiceToXero"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Container/BoundMethod.php", "line": 36, "function": "Illuminate\\Container\\{closure}", "class": "Illuminate\\Container\\BoundMethod"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/CallQueuedHandler.php", "line": 128, "function": "dispatchNow", "class": "Illuminate\\Bus\\Dispatcher"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/Worker.php", "line": 441, "function": "fire", "class": "Illuminate\\Queue\\Jobs\\Job"},
+      {"file": "/var/www/html/artisan", "line": 13, "function": "handleCommand", "class": "Illuminate\\Foundation\\Application"}
+    ]
+  },
+  "job": {
+    "name": "App\\Jobs\\SyncInvoiceToXero",
+    "id": "9d3c1a5e-7b2f-4c8e-a1d6-3f5b8e2c7a90",
+    "queue": "integrations",
+    "connection": "redis",
+    "attempts": 3,
+    "max_tries": 3,
+    "kind": "terminal",
+    "payload": {"invoice_id": 4210, "tenant": "acme", "api_token": "xero-secret-token"}
+  }
+}

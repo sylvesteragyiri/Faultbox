@@ -15,6 +15,7 @@ import (
 
 	"github.com/sylvesteragyiri/faultbox/internal/auth"
 	"github.com/sylvesteragyiri/faultbox/internal/httpx"
+	"github.com/sylvesteragyiri/faultbox/internal/ingest"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 	"github.com/sylvesteragyiri/faultbox/web"
 )
@@ -30,6 +31,8 @@ type Options struct {
 	RetentionDays int
 	// PublicURL is the address Laravel apps report to, shown in setup snippets.
 	PublicURL string
+	// Metrics reports ingestion counters for the Settings page.
+	Metrics func() ingest.Snapshot
 }
 
 // Handler is the dashboard's root handler.
@@ -208,9 +211,15 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
+	stats, err := h.store.Stats(r.Context())
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
 	h.render(w, http.StatusOK, "overview", "", h.newPage(r, "Overview", "overview", map[string]any{
 		"ActiveProjects":   active,
 		"DisabledProjects": disabled,
+		"Stats":            stats,
 	}))
 }
 
@@ -240,10 +249,19 @@ func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
 		"DatabaseSize":  databaseSize(h.store.Path()),
 		"RetentionDays": h.opts.RetentionDays,
 		"Users":         users,
+		"Ingest":        h.metricsSnapshot(),
 	}))
 }
 
 // ---- small helpers ----
+
+func (h *Handler) metricsSnapshot() *ingest.Snapshot {
+	if h.opts.Metrics == nil {
+		return nil
+	}
+	s := h.opts.Metrics()
+	return &s
+}
 
 // databaseSize sums the database file and its WAL.
 func databaseSize(path string) int64 {

@@ -1,0 +1,33 @@
+{
+  "level": "error",
+  "environment": "production",
+  "release": "2026.11.1",
+  "exception": {
+    "type": "Illuminate\\Database\\UniqueConstraintViolationException",
+    "message": "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'jane.doe@example.com' for key 'users.users_email_unique' (Connection: mysql, SQL: insert into `users` (`name`, `email`, `password`, `updated_at`, `created_at`) values (Jane Doe, jane.doe@example.com, $2y$12$Qm9vZ3VzSGFzaFZhbHVlLi4u, 2026-11-09 10:14:03, 2026-11-09 10:14:03))",
+    "frames": [
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Database/Connection.php", "line": 825, "function": "runQueryCallback", "class": "Illuminate\\Database\\Connection"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Database/Connection.php", "line": 779, "function": "run", "class": "Illuminate\\Database\\Connection"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Database/MySqlConnection.php", "line": 42, "function": "insert", "class": "Illuminate\\Database\\MySqlConnection"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Database/Query/Builder.php", "line": 3717, "function": "insertGetId", "class": "Illuminate\\Database\\Query\\Builder"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php", "line": 1334, "function": "insertAndSetId", "class": "Illuminate\\Database\\Eloquent\\Model"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php", "line": 1162, "function": "save", "class": "Illuminate\\Database\\Eloquent\\Model"},
+      {"file": "/var/www/releases/20261109101200/app/Actions/Fortify/CreateNewUser.php", "line": 34, "function": "create", "class": "App\\Actions\\Fortify\\CreateNewUser"},
+      {"file": "/var/www/releases/20261109101200/app/Http/Controllers/Auth/RegisterController.php", "line": 41, "function": "store", "class": "App\\Http\\Controllers\\Auth\\RegisterController"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php", "line": 47, "function": "callAction", "class": "Illuminate\\Routing\\Controller"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Routing/Route.php", "line": 266, "function": "dispatch", "class": "Illuminate\\Routing\\ControllerDispatcher"},
+      {"file": "/var/www/releases/20261109101200/vendor/laravel/framework/src/Illuminate/Pipeline/Pipeline.php", "line": 169, "function": "Illuminate\\Pipeline\\{closure}", "class": "Illuminate\\Pipeline\\Pipeline"},
+      {"file": "/var/www/releases/20261109101200/public/index.php", "line": 17, "function": "handleRequest", "class": "Illuminate\\Foundation\\Application"}
+    ]
+  },
+  "request": {
+    "url": "https://shop.example.com/register",
+    "method": "POST",
+    "status_code": 500,
+    "route": "register.store",
+    "headers": {"User-Agent": "Mozilla/5.0", "Accept": "text/html", "Cookie": "laravel_session=abc123", "Authorization": "Bearer secret-token"}
+  },
+  "user": {"id": "guest"},
+  "context": {"form": {"name": "Jane Doe", "email": "jane.doe@example.com", "password": "hunter2hunter2"}},
+  "correlation_id": "req_01JCDX4N7Q2Z8V5K3M9W6T1R0P"
+}

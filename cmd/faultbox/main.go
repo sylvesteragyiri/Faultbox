@@ -73,11 +73,6 @@ func run(cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err := a.Close(); err != nil {
-			logger.Error("close database", "error", err)
-		}
-	}()
 
 	addr := net.JoinHostPort("", cfg.Port)
 	srv := &http.Server{
@@ -99,16 +94,22 @@ func run(cfg config.Config, logger *slog.Logger) error {
 		close(errCh)
 	}()
 
+	var serveErr error
 	select {
-	case err := <-errCh:
-		return err
+	case serveErr = <-errCh:
 	case <-ctx.Done():
 	}
 
+	// Stop HTTP first so no new events arrive, then drain the queue into the
+	// database, then close it, all within one shutdown budget (D14).
 	logger.Info("shutting down", "timeout", cfg.ShutdownTimeout.String())
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return srv.Shutdown(shutdownCtx)
+	httpErr := srv.Shutdown(shutdownCtx)
+	drainErr := a.Shutdown(shutdownCtx)
+	m := a.Metrics()
+	logger.Info("stopped", "events_processed", m.Processed, "events_lost", m.Lost)
+	return errors.Join(serveErr, httpErr, drainErr)
 }
 
 // healthcheck probes /ready on the local server. It exists because the

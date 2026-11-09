@@ -1,0 +1,15 @@
+{
+  "environment": "staging",
+  "release": "2026.11.1-rc.2",
+  "exception": {
+    "type": "TypeError",
+    "message": "App\\Services\\PriceCalculator::total(): Argument #1 ($items) must be of type array, null given, called in /var/www/releases/20261109093000/app/Http/Controllers/CartController.php on line 42",
+    "frames": [
+      {"file": "/var/www/releases/20261109093000/app/Services/PriceCalculator.php", "line": 18, "function": "total", "class": "App\\Services\\PriceCalculator"},
+      {"file": "/var/www/releases/20261109093000/app/Http/Controllers/CartController.php", "line": 42, "function": "summary", "class": "App\\Http\\Controllers\\CartController"},
+      {"file": "/var/www/releases/20261109093000/vendor/laravel/framework/src/Illuminate/Routing/Controller.php", "line": 54, "function": "callAction", "class": "Illuminate\\Routing\\Controller"},
+      {"file": "/var/www/releases/20261109093000/public/index.php", "line": 17, "function": "handleRequest", "class": "Illuminate\\Foundation\\Application"}
+    ]
+  },
+  "request": {"url": "https://staging.shop.example.com/cart/summary", "method": "GET", "status_code": 500}
+}

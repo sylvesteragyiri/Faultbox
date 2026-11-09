@@ -1,0 +1,24 @@
+{
+  "environment": "production",
+  "exception": {
+    "type": "Illuminate\\Queue\\MaxAttemptsExceededException",
+    "message": "App\\Jobs\\ProcessPodcast has been attempted too many times.",
+    "frames": [
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/Worker.php", "line": 809, "function": "maxAttemptsExceededException", "class": "Illuminate\\Queue\\Worker"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/Worker.php", "line": 550, "function": "markJobAsFailedIfAlreadyExceedsMaxAttempts", "class": "Illuminate\\Queue\\Worker"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/Worker.php", "line": 432, "function": "process", "class": "Illuminate\\Queue\\Worker"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/Worker.php", "line": 197, "function": "runJob", "class": "Illuminate\\Queue\\Worker"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Queue/Console/WorkCommand.php", "line": 148, "function": "daemon", "class": "Illuminate\\Queue\\Worker"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Console/Command.php", "line": 211, "function": "handle", "class": "Illuminate\\Queue\\Console\\WorkCommand"}
+    ]
+  },
+  "job": {
+    "name": "App\\Jobs\\ProcessPodcast",
+    "id": "51",
+    "queue": "media",
+    "connection": "database",
+    "attempts": 4,
+    "max_tries": 3,
+    "kind": "terminal"
+  }
+}

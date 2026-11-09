@@ -4,8 +4,10 @@
 <section class="stats" aria-label="Summary">
   <div class="stat card"><span class="stat-label">Active projects</span><span class="stat-value">{{.ActiveProjects}}</span></div>
   <div class="stat card"><span class="stat-label">Disabled projects</span><span class="stat-value">{{.DisabledProjects}}</span></div>
-  <div class="stat card"><span class="stat-label">Unresolved issues</span><span class="stat-value muted">—</span><span class="stat-note">Arrives in M2</span></div>
-  <div class="stat card"><span class="stat-label">Failed jobs</span><span class="stat-value muted">—</span><span class="stat-note">Arrives in M2</span></div>
+  <div class="stat card"><span class="stat-label">Unresolved issues</span><span class="stat-value">{{.Stats.Unresolved}}</span><span class="stat-note">{{.Stats.Total}} issues in total</span></div>
+  <div class="stat card"><span class="stat-label">New issues today</span><span class="stat-value">{{.Stats.NewToday}}</span><span class="stat-note">First seen since 00:00 UTC</span></div>
+  <div class="stat card"><span class="stat-label">Total events</span><span class="stat-value">{{.Stats.Events}}</span></div>
+  <div class="stat card"><span class="stat-label">Failed jobs</span><span class="stat-value">{{.Stats.QueueFailures}}</span></div>
 </section>
 
 {{if eq .ActiveProjects 0}}
@@ -17,10 +19,10 @@
     <li>Add the key to the application's <code>.env</code>. The Laravel package arrives in M3.</li>
   </ol>
 </section>
-{{else}}
+{{else if eq .Stats.Total 0}}
 <section class="card empty">
   <h2>No errors yet</h2>
-  <p class="muted">Error trends and recent issues appear here once event ingestion ships in M2.</p>
+  <p class="muted">Events sent to <code>POST /api/v1/events</code> and <code>/api/v1/queue-failures</code> are counted here. Issue lists and trends arrive in M4.</p>
 </section>
 {{end}}
 {{end}}

@@ -13,5 +13,22 @@
   </dl>
   <p class="muted small">Add users with <code>faultbox user create --email …</code>, passing the password on stdin.</p>
 </section>
+{{with .Ingest}}
+<section class="card">
+  <h2>Ingestion</h2>
+  <p class="muted small">Counters since the server started.</p>
+  <dl class="details">
+    <dt>Queue</dt><dd>{{.QueueDepth}} / {{.QueueCapacity}} events · {{bytes .QueueBytes}} / {{bytes .QueueMaxBytes}}</dd>
+    <dt>Accepted</dt><dd>{{.Accepted}}</dd>
+    <dt>Stored</dt><dd>{{.Processed}}</dd>
+    <dt>Duplicates skipped</dt><dd>{{.Duplicates}}</dd>
+    <dt>Rejected</dt><dd>{{.RejectedTotal}}{{range $reason, $n := .Rejected}}{{if $n}} <span class="tag">{{$reason}}: {{$n}}</span>{{end}}{{end}}</dd>
+    <dt>Failed to store</dt><dd>{{.Failed}}</dd>
+    <dt>Lost at shutdown</dt><dd>{{.Lost}}</dd>
+    <dt>Batches written</dt><dd>{{.Batches}}</dd>
+    <dt>Latency (queue + write)</dt><dd>avg {{.AvgLatency}} · max {{.MaxLatency}} · last batch write {{.LastBatchWrite}}</dd>
+  </dl>
+</section>
+{{end}}
 {{end}}
 {{end}}

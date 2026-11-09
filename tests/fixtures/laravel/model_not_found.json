@@ -1,0 +1,16 @@
+{
+  "environment": "production",
+  "release": "2026.11.1",
+  "exception": {
+    "type": "Illuminate\\Database\\Eloquent\\ModelNotFoundException",
+    "message": "No query results for model [App\\Models\\Order] 48213",
+    "frames": [
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Database/Eloquent/Builder.php", "line": 657, "function": "findOrFail", "class": "Illuminate\\Database\\Eloquent\\Builder"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Support/Traits/ForwardsCalls.php", "line": 23, "function": "forwardCallTo", "class": "Illuminate\\Database\\Eloquent\\Model"},
+      {"file": "/var/www/html/app/Http/Controllers/OrderController.php", "line": 58, "function": "show", "class": "App\\Http\\Controllers\\OrderController"},
+      {"file": "/var/www/html/vendor/laravel/framework/src/Illuminate/Routing/ControllerDispatcher.php", "line": 47, "function": "callAction", "class": "Illuminate\\Routing\\Controller"},
+      {"file": "/var/www/html/public/index.php", "line": 17, "function": "handleRequest", "class": "Illuminate\\Foundation\\Application"}
+    ]
+  },
+  "request": {"url": "https://shop.example.com/orders/48213", "method": "GET", "status_code": 404, "route": "orders.show"}
+}

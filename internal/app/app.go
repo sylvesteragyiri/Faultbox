@@ -15,16 +15,21 @@ import (
 	"github.com/sylvesteragyiri/faultbox/internal/auth"
 	"github.com/sylvesteragyiri/faultbox/internal/config"
 	"github.com/sylvesteragyiri/faultbox/internal/dashboard"
+	"github.com/sylvesteragyiri/faultbox/internal/ingest"
 	"github.com/sylvesteragyiri/faultbox/internal/server"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
 
 // App is a configured Faultbox instance.
 type App struct {
-	cfg     config.Config
-	logger  *slog.Logger
-	store   *store.Store
-	handler http.Handler
+	cfg       config.Config
+	logger    *slog.Logger
+	store     *store.Store
+	queue     *ingest.Queue
+	metrics   *ingest.Metrics
+	processor *ingest.Processor
+	handler   http.Handler
+	closed    bool
 }
 
 // New opens the database, applies migrations, creates the bootstrap admin
@@ -42,7 +47,9 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		return nil, err
 	}
 
-	a := &App{cfg: cfg, logger: logger, store: st}
+	a := &App{cfg: cfg, logger: logger, store: st, metrics: &ingest.Metrics{}}
+	a.queue = ingest.NewQueue(cfg.QueueSize, cfg.QueueMaxBytes)
+	a.processor = ingest.NewProcessor(a.queue, st, a.metrics, logger, ingest.ProcessorOptions{})
 	if err := a.bootstrapAdmin(ctx); err != nil {
 		_ = st.Close()
 		return nil, err
@@ -57,6 +64,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		Version:       version,
 		RetentionDays: cfg.RetentionDays,
 		PublicURL:     cfg.PublicURL,
+		Metrics:       func() ingest.Snapshot { return a.metrics.Snapshot(a.queue) },
 	})
 	if err != nil {
 		_ = st.Close()
@@ -64,11 +72,25 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	}
 
 	a.handler = server.New(server.Options{
-		Logger:    logger,
-		API:       api.New(st, logger),
+		Logger: logger,
+		API: api.New(st, logger, api.IngestOptions{
+			Queue:   a.queue,
+			Metrics: a.metrics,
+			Limiter: ingest.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
+			MaxBody: cfg.MaxEventBytes,
+		}),
 		Dashboard: dash,
-		Ready:     []server.ReadyCheck{{Name: "database", Check: st.Ping}},
+		Ready: []server.ReadyCheck{
+			{Name: "database", Check: st.Ping},
+			{Name: "queue", Check: func(context.Context) error {
+				if !a.queue.Accepting() {
+					return errors.New("ingestion queue is full or closed")
+				}
+				return nil
+			}},
+		},
 	})
+	a.processor.Start()
 	return a, nil
 }
 
@@ -78,8 +100,29 @@ func (a *App) Handler() http.Handler { return a.handler }
 // Store exposes the database, for the CLI and tests.
 func (a *App) Store() *store.Store { return a.store }
 
-// Close releases the database.
-func (a *App) Close() error { return a.store.Close() }
+// Metrics returns the current ingestion counters.
+func (a *App) Metrics() ingest.Snapshot { return a.metrics.Snapshot(a.queue) }
+
+// Flush waits until every event accepted so far has been written. Tests use it.
+func (a *App) Flush(ctx context.Context) error { return a.processor.Flush(ctx) }
+
+// Shutdown stops accepting events, drains the queue within ctx's deadline
+// and closes the database. Call it after the HTTP server has stopped.
+func (a *App) Shutdown(ctx context.Context) error {
+	if a.closed {
+		return nil
+	}
+	a.closed = true
+	drainErr := a.processor.Shutdown(ctx)
+	return errors.Join(drainErr, a.store.Close())
+}
+
+// Close is Shutdown with the configured drain timeout.
+func (a *App) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
+	defer cancel()
+	return a.Shutdown(ctx)
+}
 
 // bootstrapAdmin creates the first dashboard user from FAULTBOX_ADMIN_EMAIL
 // and FAULTBOX_ADMIN_PASSWORD, but only while no users exist (D9). Later

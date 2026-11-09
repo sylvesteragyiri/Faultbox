@@ -1,7 +1,12 @@
 # Faultbox
 Lightweight, self-hosted error and queue monitoring for Laravel applications.
 
-> **Status:** early development. M1 (foundation) is in place: the dashboard, projects, API keys and health probes. Error ingestion arrives in M2. See [docs/roadmap.md](docs/roadmap.md).
+> **Status:** early development.
+> - **M1:** the dashboard, projects, API keys and health probes.
+> - **M2:** ingestion. Exceptions and failed jobs are received, grouped into issues and stored.
+> - **Next:** the Laravel package (M3) and the issue views (M4).
+>
+> See [docs/roadmap.md](docs/roadmap.md).
 
 ## Run with Docker
 
@@ -28,6 +33,9 @@ Then open http://localhost:8080 and log in. Keep `FAULTBOX_SECRET` the same acro
 | `FAULTBOX_PUBLIC_URL` | taken from the request | External URL shown as the DSN in Laravel setup snippets. |
 | `FAULTBOX_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` and `X-Forwarded-Proto`. Enable only behind your own reverse proxy. |
 | `FAULTBOX_RETENTION_DAYS` | `30` | Event retention. Used from M7. |
+| `FAULTBOX_MAX_EVENT_KB` | `256` | Largest event body after decompression. |
+| `FAULTBOX_RATE_LIMIT` / `FAULTBOX_RATE_BURST` | `50` / `200` | Events per second per project, and the burst size. |
+| `FAULTBOX_QUEUE_SIZE` / `FAULTBOX_QUEUE_MAX_MB` | `1000` / `32` | Ingestion queue limits. When either is reached, the API answers `503`. |
 | `FAULTBOX_SHUTDOWN_TIMEOUT` | `10s` | Grace period for in-flight requests on shutdown. |
 | `FAULTBOX_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. Logs are JSON on stdout. |
 
@@ -45,10 +53,14 @@ faultbox version
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /health` | none | Liveness: the process is serving HTTP. |
-| `GET /ready` | none | Readiness: the database answers. |
-| `GET /api/v1/projects/me` | project API key | Shows which project a key belongs to. Send the key as `Authorization: Bearer fbx_…` or in the `X-Faultbox-Key` header. |
+| `GET /ready` | none | Readiness: the database answers and the ingestion queue has room. |
+| `POST /api/v1/events` | project API key | Report an exception or a message. Answers `202` right away; the event is stored a moment later. |
+| `POST /api/v1/queue-failures` | project API key | Report a failed queue job. |
+| `GET /api/v1/projects/me` | project API key | Shows which project a key belongs to. |
 
-API errors always use one JSON shape: `{"error": {"code": "invalid_api_key", "message": "…"}}`.
+Send the key as `Authorization: Bearer fbx_…` or in the `X-Faultbox-Key` header.
+
+API errors always use one JSON shape: `{"error": {"code": "invalid_api_key", "message": "…"}}`. The full contract, with JSON Schemas, limits and grouping rules, is in [docs/api/](docs/api/README.md).
 
 ## Run locally
 

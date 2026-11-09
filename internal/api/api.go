@@ -11,6 +11,7 @@ import (
 
 	"github.com/sylvesteragyiri/faultbox/internal/auth"
 	"github.com/sylvesteragyiri/faultbox/internal/httpx"
+	"github.com/sylvesteragyiri/faultbox/internal/ingest"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
 
@@ -18,13 +19,19 @@ import (
 type Handler struct {
 	store  *store.Store
 	logger *slog.Logger
+	ingest IngestOptions
 	mux    *http.ServeMux
 }
 
 // New builds the API handler.
-func New(st *store.Store, logger *slog.Logger) *Handler {
-	h := &Handler{store: st, logger: logger, mux: http.NewServeMux()}
+func New(st *store.Store, logger *slog.Logger, opts IngestOptions) *Handler {
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
+	h := &Handler{store: st, logger: logger, ingest: opts, mux: http.NewServeMux()}
 	h.mux.Handle("GET /api/v1/projects/me", h.requireProject(http.HandlerFunc(h.projectMe)))
+	h.mux.Handle("POST /api/v1/events", h.requireProject(h.ingestHandler(ingest.KindException)))
+	h.mux.Handle("POST /api/v1/queue-failures", h.requireProject(h.ingestHandler(ingest.KindQueueFailure)))
 	return h
 }
 
