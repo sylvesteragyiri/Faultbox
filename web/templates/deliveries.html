@@ -1,0 +1,71 @@
+{{define "content"}}
+{{with .Data}}{{$p := .Page}}
+<header class="page-head">
+  <div>
+    <h1>{{$p.Title}}</h1>
+    <p class="page-sub">{{$p.Lead}}{{with .ScopeName}} in {{.}}{{end}}{{with .Env}} ({{.}}){{end}}.</p>
+  </div>
+</header>
+
+<section class="stats" aria-label="Summary">
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" $p.Icon}}</span><span class="stat-label">Sent</span><span class="stat-value">{{compact .Summary.Sent}}</span><span class="stat-note">Last {{.Range}} days</span></div>
+  <div class="stat card"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Failed</span><span class="stat-value">{{compact .Summary.Failed}}</span><span class="stat-note">Last {{.Range}} days</span></div>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "activity"}}</span><span class="stat-label">Failure rate</span><span class="stat-value">{{.Summary.FailurePercent}}%</span><span class="stat-note">Of every attempt</span></div>
+  <div class="stat card"><span class="stat-icon tone-accent">{{template "icon" "layers"}}</span><span class="stat-label">{{$p.NameNoun}}</span><span class="stat-value">{{.Summary.Names}}</span><span class="stat-note">Sent at least once</span></div>
+</section>
+
+{{if or .Summary.Sent .Summary.Failed}}
+<section class="card">
+  <div class="section-head">
+    <h2>{{$p.Title}} per day</h2>
+    <nav class="seg" aria-label="Chart range">
+      <a href="{{$p.Path}}?range=7d" {{if eq .Range 7}}aria-current="true"{{end}}>7 days</a>
+      <a href="{{$p.Path}}?range=14d" {{if eq .Range 14}}aria-current="true"{{end}}>14 days</a>
+      <a href="{{$p.Path}}" {{if eq .Range 30}}aria-current="true"{{end}}>30 days</a>
+    </nav>
+  </div>
+  {{template "bar_chart" .Chart}}
+</section>
+
+<section class="card table-wrap">
+  <div class="section-head table-title"><h2>By {{lower $p.NameLabel}} and {{lower $p.ChanLabel}}</h2><span class="muted small">failing first</span></div>
+  <table>
+    <thead><tr><th>{{$p.NameLabel}}</th><th>{{$p.ChanLabel}}</th><th class="num">Sent</th><th class="num">Failed</th><th class="num hide-sm">Failure rate</th><th class="hide-sm">Last sent</th></tr></thead>
+    <tbody>
+    {{range .Stats}}
+      <tr>
+        <td class="issue-cell"><span class="issue-title" title="{{.Name}}">{{if eq .Name "raw"}}Raw mail{{else}}{{classShort .Name}}{{end}}</span><div class="muted small mono truncate">{{if eq .Name "raw"}}Mail::raw or a closure{{else}}{{classNamespace .Name}}{{end}}</div></td>
+        <td><span class="tag">{{.Channel}}</span></td>
+        <td class="num">{{compact .Sent}}</td>
+        <td class="num">{{if .Failed}}<strong class="error-text">{{compact .Failed}}</strong>{{else}}<span class="muted">0</span>{{end}}</td>
+        <td class="num hide-sm">{{if .Failed}}{{.FailurePercent}}%{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="muted nowrap hide-sm"><time datetime="{{isoTime .LastAt}}" title="{{datetime .LastAt}}">{{timeago .LastAt}}</time></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <div class="section-head"><h2>Recent failures</h2></div>
+  {{if .Failures}}
+  <ul class="list">
+    {{range .Failures}}
+    <li>
+      <span class="issue-title">{{if eq .Name "raw"}}Raw mail{{else}}{{classShort .Name}}{{end}}</span> <span class="tag">{{.Channel}}</span>
+      <div class="issue-message"><span class="mono small">{{classShort .ErrorType}}</span>: {{truncate .ErrorMessage 220}}</div>
+      <div class="muted small">{{index $.Data.Names .ProjectID}} · {{.Environment}} · {{if eq $p.Extra "to"}}to {{classShort .Extra}}{{else}}{{.Extra}} recipient{{if ne .Extra "1"}}s{{end}}{{end}}{{if .Release}} · {{.Release}}{{end}} · <time datetime="{{isoTime .OccurredAt}}" title="{{datetime .OccurredAt}}">{{timeago .OccurredAt}}</time></div>
+    </li>
+    {{end}}
+  </ul>
+  {{else}}<p class="muted">No failures. They appear here with the reason the {{lower $p.ChanLabel}} gave.</p>{{end}}
+</section>
+{{else}}
+<section class="card empty">
+  <span class="badge">Nothing yet</span>
+  <h2>See every {{if eq $p.Nav "mail"}}email{{else}}notification{{end}} your app sends</h2>
+  <p class="muted">{{$p.EmptyText}}</p>
+</section>
+{{end}}
+{{end}}
+{{end}}

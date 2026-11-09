@@ -23,7 +23,9 @@
           <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>{{template "icon" "overview"}}<span>Overview</span></a></li>
           <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}>{{template "icon" "issues"}}<span>Issues</span></a></li>
           <li><a href="/queue-failures" {{if eq .Nav "queue"}}aria-current="page"{{end}}>{{template "icon" "queue"}}<span>Queue Failures</span></a></li>
-          <li><a href="/app-notifications" {{if eq .Nav "app_notifications"}}aria-current="page"{{end}}>{{template "icon" "mail"}}<span>App notifications</span></a></li>
+          <li><a href="/app-notifications" {{if eq .Nav "app_notifications"}}aria-current="page"{{end}}>{{template "icon" "send"}}<span>App notifications</span></a></li>
+          <li><a href="/mail" {{if eq .Nav "mail"}}aria-current="page"{{end}}>{{template "icon" "mail"}}<span>Mail</span></a></li>
+          <li><a href="/commands" {{if eq .Nav "commands"}}aria-current="page"{{end}}>{{template "icon" "terminal"}}<span>Commands</span></a></li>
         </ul>
         <p class="nav-label">Configure</p>
         <ul>

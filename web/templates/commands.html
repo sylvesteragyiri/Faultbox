@@ -1,0 +1,83 @@
+{{define "content"}}
+{{with .Data}}
+<header class="page-head">
+  <div>
+    <h1>Commands</h1>
+    <p class="page-sub">Artisan commands your app ran{{with .ScopeName}} in {{.}}{{end}}{{with .Env}} ({{.}}){{end}}, including scheduled ones. Long-running workers are left out.</p>
+  </div>
+</header>
+
+<section class="stats" aria-label="Summary">
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "terminal"}}</span><span class="stat-label">Runs</span><span class="stat-value">{{compact .Summary.Runs}}</span><span class="stat-note">Last {{.Range}} days</span></div>
+  <div class="stat card"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Failed</span><span class="stat-value">{{compact .Summary.Failed}}</span><span class="stat-note">Exit code other than 0</span></div>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "activity"}}</span><span class="stat-label">Failure rate</span><span class="stat-value">{{.Summary.FailurePercent}}%</span><span class="stat-note">{{.Summary.Commands}} different commands</span></div>
+  <div class="stat card"><span class="stat-icon tone-accent">{{template "icon" "clock"}}</span><span class="stat-label">Average run</span><span class="stat-value stat-sm">{{duration .Summary.AvgMs}}</span><span class="stat-note">Across every run</span></div>
+</section>
+
+{{if .Summary.Runs}}
+<section class="card">
+  <div class="section-head">
+    <h2>Runs per day</h2>
+    <nav class="seg" aria-label="Chart range">
+      <a href="/commands?range=7d" {{if eq .Range 7}}aria-current="true"{{end}}>7 days</a>
+      <a href="/commands?range=14d" {{if eq .Range 14}}aria-current="true"{{end}}>14 days</a>
+      <a href="/commands" {{if eq .Range 30}}aria-current="true"{{end}}>30 days</a>
+    </nav>
+  </div>
+  {{template "bar_chart" .Chart}}
+</section>
+
+<section class="card table-wrap">
+  <div class="section-head table-title"><h2>By command</h2><span class="muted small">failing first</span></div>
+  <table>
+    <thead><tr><th>Command</th><th class="num">Runs</th><th class="num">Failed</th><th class="num hide-sm">Average</th><th class="num hide-sm">Slowest</th><th>Last run</th></tr></thead>
+    <tbody>
+    {{range .Stats}}
+      <tr>
+        <td class="issue-cell"><span class="issue-title mono">{{.Command}}</span>{{if .Failed}}<div class="muted small">{{.FailurePercent}}% of runs failed</div>{{end}}</td>
+        <td class="num">{{compact .Runs}}</td>
+        <td class="num">{{if .Failed}}<strong class="error-text">{{compact .Failed}}</strong>{{else}}<span class="muted">0</span>{{end}}</td>
+        <td class="num nowrap hide-sm">{{duration .AvgMs}}</td>
+        <td class="num nowrap hide-sm">{{duration .MaxMs}}</td>
+        <td class="nowrap"><time datetime="{{isoTime .LastAt}}" title="{{datetime .LastAt}}" class="muted">{{timeago .LastAt}}</time>
+          {{if eq .LastExit 0}}<span class="badge badge-ok">exit 0</span>{{else}}<span class="badge badge-off">exit {{.LastExit}}</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+
+<section class="card table-wrap">
+  <div class="section-head table-title">
+    <h2>{{if .FailedOnly}}Recent failed runs{{else}}Recent runs{{end}}</h2>
+    <nav class="seg" aria-label="Which runs">
+      <a href="/commands?range={{.Range}}d" {{if .FailedOnly}}aria-current="true"{{end}}>Failed</a>
+      <a href="/commands?range={{.Range}}d&amp;runs=all" {{if not .FailedOnly}}aria-current="true"{{end}}>All</a>
+    </nav>
+  </div>
+  {{if .Runs}}
+  <table>
+    <thead><tr><th>Started</th><th>Command</th><th>Result</th><th class="num">Duration</th><th class="hide-sm">Environment</th></tr></thead>
+    <tbody>
+    {{range .Runs}}
+      <tr>
+        <td class="nowrap muted"><time datetime="{{isoTime .StartedAt}}" title="{{datetime .StartedAt}}">{{timeago .StartedAt}}</time></td>
+        <td class="issue-cell"><span class="mono">{{.Command}}</span>{{if .ErrorMessage}}<div class="small error-text">{{classShort .ErrorType}}: {{truncate .ErrorMessage 200}}</div>{{end}}</td>
+        <td>{{if .Failed}}<span class="badge badge-off">exit {{.ExitCode}}</span>{{else}}<span class="badge badge-ok">exit 0</span>{{end}}</td>
+        <td class="num nowrap">{{duration .DurationMs}}</td>
+        <td class="hide-sm small">{{index $.Data.Names .ProjectID}} · {{.Environment}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}<p class="muted table-empty">{{if .FailedOnly}}No failed runs. Commands that exit with a code other than 0 appear here with their error.{{else}}No runs yet.{{end}}</p>{{end}}
+</section>
+{{else}}
+<section class="card empty">
+  <span class="badge">Nothing yet</span>
+  <h2>See the artisan commands your app runs</h2>
+  <p class="muted">Every <code>php artisan</code> command and scheduled task is reported automatically, with its exit code and duration. Workers such as <code>queue:work</code>, <code>horizon</code> and <code>schedule:run</code> are left out, but the commands the scheduler starts are counted.</p>
+</section>
+{{end}}
+{{end}}
+{{end}}

@@ -32,7 +32,9 @@ func New(st *store.Store, logger *slog.Logger, opts IngestOptions) *Handler {
 	h.mux.Handle("GET /api/v1/projects/me", h.requireProject(http.HandlerFunc(h.projectMe)))
 	h.mux.Handle("POST /api/v1/events", h.requireProject(h.ingestHandler(ingest.KindException)))
 	h.mux.Handle("POST /api/v1/queue-failures", h.requireProject(h.ingestHandler(ingest.KindQueueFailure)))
-	h.mux.Handle("POST /api/v1/notifications", h.requireProject(h.notificationsHandler()))
+	h.mux.Handle("POST /api/v1/telemetry", h.requireProject(h.telemetryHandler()))
+	// The first telemetry endpoint, notifications only; same handler.
+	h.mux.Handle("POST /api/v1/notifications", h.requireProject(h.telemetryHandler()))
 	return h
 }
 

@@ -12,18 +12,19 @@ import (
 	"github.com/sylvesteragyiri/faultbox/internal/ingest"
 )
 
-// NotificationsResponse is the 202 body of POST /api/v1/notifications.
-type NotificationsResponse struct {
+// TelemetryResponse is the 202 body of POST /api/v1/telemetry.
+type TelemetryResponse struct {
 	Status string `json:"status"` // accepted, or duplicate for a batch already stored
 	Count  int    `json:"count"`
 }
 
-// notificationsHandler serves POST /api/v1/notifications: a batch of the
-// Laravel notifications one request, job or command sent. It shares the
-// events' rate limit, size limit and error format. A batch is a handful of
-// counter updates, so it is written straight away in one short transaction
-// instead of going through the event queue.
-func (h *Handler) notificationsHandler() http.HandlerFunc {
+// telemetryHandler serves POST /api/v1/telemetry (and its older alias
+// POST /api/v1/notifications): the Laravel notifications, mail and artisan
+// commands one request, job or command produced. It shares the events' rate
+// limit, size limit and error format. A batch is a handful of counter
+// updates, so it is written straight away in one short transaction instead
+// of going through the event queue.
+func (h *Handler) telemetryHandler() http.HandlerFunc {
 	o := h.ingest
 	return func(w http.ResponseWriter, r *http.Request) {
 		project, _ := ProjectFrom(r.Context())
@@ -54,19 +55,19 @@ func (h *Handler) notificationsHandler() http.HandlerFunc {
 			httpx.WriteError(w, http.StatusBadRequest, ingest.RejectInvalidJSON, "The request body could not be read: "+err.Error())
 			return
 		}
-		batch, err := ingest.DecodeNotifications(strings.NewReader(body))
+		batch, err := ingest.DecodeTelemetry(strings.NewReader(body))
 		if err != nil {
 			o.Metrics.Reject(ingest.RejectInvalidJSON)
 			httpx.WriteError(w, http.StatusBadRequest, ingest.RejectInvalidJSON, err.Error())
 			return
 		}
-		items, err := ingest.ValidateNotifications(batch, project.Environments, o.Now())
+		valid, err := ingest.ValidateTelemetry(batch, project.Environments, o.Now())
 		if err != nil {
 			o.Metrics.Reject(ingest.RejectValidation)
 			var ve *ingest.ValidationError
 			var resp ValidationErrorBody
 			resp.Error.Code = ingest.RejectValidation
-			resp.Error.Message = "The notification batch failed validation."
+			resp.Error.Message = "The telemetry batch failed validation."
 			if errors.As(err, &ve) {
 				resp.Error.Details = ve.Fields
 			}
@@ -74,15 +75,15 @@ func (h *Handler) notificationsHandler() http.HandlerFunc {
 			return
 		}
 
-		duplicate, err := h.store.IngestAppNotifications(r.Context(), project.ID, batch.BatchID, items)
+		duplicate, err := h.store.IngestTelemetry(r.Context(), project.ID, valid)
 		if err != nil {
-			h.logger.Error("store notification batch", "project_id", project.ID, "error", err)
+			h.logger.Error("store telemetry batch", "project_id", project.ID, "error", err)
 			w.Header().Set("Retry-After", "5")
 			httpx.WriteError(w, http.StatusServiceUnavailable, "store_failed",
 				"The batch could not be stored. Retry the same batch (same batch_id) later.")
 			return
 		}
-		resp := NotificationsResponse{Status: "accepted", Count: len(items)}
+		resp := TelemetryResponse{Status: "accepted", Count: len(valid.Notifications) + len(valid.Mails) + len(valid.Commands)}
 		if duplicate {
 			resp.Status = "duplicate"
 		}

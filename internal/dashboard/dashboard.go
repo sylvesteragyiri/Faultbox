@@ -110,6 +110,8 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /queue-failures/jobs", h.failedJobList)
 	authed.HandleFunc("GET /queue-failures/{id}", h.failedJobShow)
 	authed.HandleFunc("GET /app-notifications", h.appNotifications)
+	authed.HandleFunc("GET /mail", h.mail)
+	authed.HandleFunc("GET /commands", h.commands)
 	authed.HandleFunc("GET /notifications", h.notificationsPage)
 	authed.HandleFunc("GET /notifications/channels/new", h.channelNew)
 	authed.HandleFunc("POST /notifications/channels", h.channelCreate)
@@ -145,7 +147,7 @@ func cacheStatic(next http.Handler) http.Handler {
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
 	"settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
-	"notifications", "notification_channel", "notification_secret", "app_notifications",
+	"notifications", "notification_channel", "notification_secret", "deliveries", "commands",
 }
 
 // assetURL returns a function mapping a static path to its URL with a
@@ -206,6 +208,7 @@ func (h *Handler) parseTemplates() error {
 		},
 		"hasString": slices.Contains[[]string],
 		"lower":     strings.ToLower,
+		"duration":  durationText,
 		"signed": func(n int64) string {
 			if n > 0 {
 				return "+" + compact(n)
@@ -428,6 +431,19 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		"Recent":           h.issueRows(names, recent.Issues),
 		"Failures":         failures,
 	}))
+}
+
+// durationText formats milliseconds for people: 340 ms, 1.2 s, 2 min 5 s, 1 h 3 min.
+func durationText(ms int64) string {
+	switch {
+	case ms < 1000:
+		return fmt.Sprintf("%d ms", ms)
+	case ms < 60_000:
+		return strings.TrimSuffix(fmt.Sprintf("%.1f", float64(ms)/1000), ".0") + " s"
+	case ms < 3_600_000:
+		return fmt.Sprintf("%d min %d s", ms/60_000, ms%60_000/1000)
+	}
+	return fmt.Sprintf("%d h %d min", ms/3_600_000, ms%3_600_000/60_000)
 }
 
 // heatmapWeeks is how many weeks the overview's activity heatmap shows.
