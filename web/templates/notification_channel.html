@@ -1,0 +1,159 @@
+{{define "content"}}
+{{$f := .Data.Form}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/notifications">Notifications</a> /</p>
+    <h1>{{if $f.ID}}{{$f.Name}}{{else}}New {{if eq $f.Kind "email"}}email{{else}}webhook{{end}} channel{{end}}</h1>
+    <p class="page-sub">{{if eq $f.Kind "email"}}Sends plain-text email through your own SMTP server.{{else}}POSTs a signed JSON payload to your endpoint.{{end}}</p>
+  </div>
+  {{if $f.ID}}
+  <div class="row">
+    <form method="post" action="/notifications/channels/{{$f.ID}}/test">{{template "csrf" .CSRF}}<button class="btn" type="submit">Send test</button></form>
+  </div>
+  {{end}}
+</header>
+
+<div class="grid-2 grid-wide-left">
+  <form class="card stack" method="post" action="{{if $f.ID}}/notifications/channels/{{$f.ID}}{{else}}/notifications/channels{{end}}">
+    {{template "csrf" .CSRF}}
+    <input type="hidden" name="kind" value="{{$f.Kind}}">
+    {{template "form_error" $f.Error}}
+
+    <label>Name
+      <input type="text" name="name" value="{{$f.Name}}" maxlength="100" required placeholder="{{if eq $f.Kind "email"}}On-call email{{else}}Ops webhook{{end}}">
+    </label>
+    <label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> Channel is on</label>
+
+    {{if eq $f.Kind "email"}}
+    <fieldset>
+      <legend>SMTP server</legend>
+      <div class="form-grid">
+        <label class="span-2">Host
+          <input type="text" name="host" value="{{$f.Host}}" required placeholder="smtp.example.com" autocomplete="off">
+        </label>
+        <label>Port
+          <input type="number" name="port" value="{{$f.Port}}" min="1" max="65535" required>
+        </label>
+        <label>Security
+          <select name="security">
+            <option value="starttls" {{if eq $f.Security "starttls"}}selected{{end}}>STARTTLS (587)</option>
+            <option value="tls" {{if eq $f.Security "tls"}}selected{{end}}>TLS (465)</option>
+            <option value="none" {{if eq $f.Security "none"}}selected{{end}}>None (local relay only)</option>
+          </select>
+        </label>
+        <label>Username
+          <input type="text" name="username" value="{{$f.Username}}" autocomplete="off">
+        </label>
+        <label>Password
+          <input type="password" name="password" autocomplete="new-password" placeholder="{{if $f.HasSecret}}Saved. Leave blank to keep it{{else}}Optional{{end}}">
+        </label>
+      </div>
+      {{if $f.HasSecret}}<label class="check"><input type="checkbox" name="clear_password" value="1"> Remove the saved password</label>{{end}}
+      <span class="hint">The password is encrypted with a key derived from FAULTBOX_SECRET and is never shown again.</span>
+    </fieldset>
+    <fieldset>
+      <legend>Message</legend>
+      <label>From
+        <input type="text" name="from" value="{{$f.From}}" required placeholder="Faultbox &lt;alerts@example.com&gt;">
+      </label>
+      <label>To
+        <textarea name="to" rows="2" required placeholder="oncall@example.com, dev-team@example.com">{{$f.To}}</textarea>
+        <span class="hint">Up to 20 addresses, separated by commas or new lines.</span>
+      </label>
+    </fieldset>
+    {{else}}
+    <fieldset>
+      <legend>Endpoint</legend>
+      <label>URL
+        <input type="url" name="url" value="{{$f.URL}}" required placeholder="https://hooks.example.com/faultbox">
+      </label>
+      <span class="hint">Faultbox sends a JSON POST with a 10-second timeout and doesn't follow redirects. Any 2xx response counts as delivered.{{if not $f.ID}} A signing secret is generated when you save, and shown once.{{end}}</span>
+    </fieldset>
+    {{end}}
+
+    <fieldset>
+      <legend>Scope</legend>
+      <div class="form-grid">
+        <label>Project
+          <select name="project">
+            <option value="">All projects</option>
+            {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+          </select>
+        </label>
+        <label>Environments
+          <input type="text" name="environments" value="{{$f.Environments}}" placeholder="production">
+        </label>
+      </div>
+      <span class="hint">Leave environments empty to hear about every environment.</span>
+    </fieldset>
+
+    <fieldset>
+      <legend>Alert when</legend>
+      <label class="check"><input type="checkbox" name="on_new_issue" value="1" {{if $f.OnNewIssue}}checked{{end}}> A new issue is detected</label>
+      <label class="check"><input type="checkbox" name="on_regression" value="1" {{if $f.OnRegression}}checked{{end}}> A resolved issue happens again</label>
+      <label class="check"><input type="checkbox" name="on_queue_failure" value="1" {{if $f.OnQueueFailure}}checked{{end}}> A queued job fails for good (terminal or manual, not retries)</label>
+      <div class="form-grid">
+        <label>Occurrence threshold
+          <input type="number" name="threshold_count" value="{{$f.ThresholdCount}}" min="0" max="1000000">
+          <span class="hint">Alert when one issue reaches this many events. 0 turns it off.</span>
+        </label>
+        <label>Within (minutes)
+          <input type="number" name="threshold_window" value="{{$f.ThresholdWindow}}" min="1" max="1440">
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Noise control</legend>
+      <label>Cooldown (minutes)
+        <input type="number" name="cooldown" value="{{$f.Cooldown}}" min="1" max="10080" required>
+        <span class="hint">After an alert, the same issue and trigger stay quiet on this channel for this long, so a burst of 1,000 events sends one alert.</span>
+      </label>
+    </fieldset>
+
+    <div class="row">
+      <button class="btn btn-primary" type="submit">{{if $f.ID}}Save channel{{else}}Create channel{{end}}</button>
+      <a class="btn" href="/notifications">Cancel</a>
+    </div>
+  </form>
+
+  <div class="stack">
+    {{if eq $f.Kind "webhook"}}
+    <section class="card">
+      <h2>Verifying requests</h2>
+      <p class="small">Each request carries <code>X-Faultbox-Timestamp</code> and <code>X-Faultbox-Signature: sha256=…</code>, an HMAC-SHA256 of <code>timestamp + "." + body</code> keyed with the channel secret. Compare it in constant time and reject old timestamps.</p>
+      <p class="small">Other headers: <code>X-Faultbox-Event</code> (the trigger) and <code>X-Faultbox-Delivery</code> (a unique ID for de-duplicating retries).</p>
+      {{if $f.ID}}
+      <form method="post" action="/notifications/channels/{{$f.ID}}/secret" data-confirm="Generate a new signing secret? The current one stops working immediately.">
+        {{template "csrf" .CSRF}}<button class="btn" type="submit">Rotate secret</button>
+      </form>
+      {{end}}
+    </section>
+    {{end}}
+    <section class="card">
+      <h2>How alerts are delivered</h2>
+      <ul class="plain-list small">
+        <li>Alerts are queued separately from ingestion, so slow SMTP or webhook targets never delay storing events.</li>
+        <li>Failed deliveries are retried after 30 s, 2 min, 10 min, 30 min and 2 h, then marked failed. Client errors (4xx) and rejected recipients fail straight away.</li>
+        <li>Every attempt is recorded in the delivery history.</li>
+      </ul>
+    </section>
+    {{if $f.ID}}
+    <section class="card danger-zone">
+      <h2>Delete channel</h2>
+      <p class="small muted">Removes the channel and its delivery history.</p>
+      <form method="post" action="/notifications/channels/{{$f.ID}}/delete" data-confirm="Delete this channel and its delivery history?">
+        {{template "csrf" .CSRF}}<button class="btn btn-danger" type="submit">Delete channel</button>
+      </form>
+    </section>
+    {{end}}
+  </div>
+</div>
+
+{{if $f.ID}}
+<section class="card table-wrap">
+  <div class="section-head table-title"><h2>Recent deliveries</h2></div>
+  {{template "delivery_rows" (dict "Rows" .Data.History "CSRF" .CSRF "ShowChannel" false)}}
+</section>
+{{end}}
+{{end}}

@@ -1,6 +1,6 @@
 {{define "content"}}
 {{$f := .Data.Form}}
-<header class="page-head"><h1>Issues</h1></header>
+<header class="page-head"><div><h1>Issues</h1><p class="page-sub">Exceptions grouped by type, message and stack trace.</p></div></header>
 
 <form class="card filters" method="get" action="/issues"
       hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true"

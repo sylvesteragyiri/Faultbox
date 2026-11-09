@@ -12,32 +12,55 @@
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
 {{if .User}}
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="shell">
-    <nav class="sidebar" aria-label="Main">
-      <a class="brand" href="/"><img src="{{asset "favicon.svg"}}" alt="" width="22" height="22"> Faultbox</a>
-      <p class="nav-label">Monitor</p>
-      <ul>
-        <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> Overview</a></li>
-        <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Issues</a></li>
-        <li><a href="/queue-failures" {{if eq .Nav "queue"}}aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="15" width="18" height="5" rx="1.5"/><path d="m9.5 10.5 5 3"/><path d="m14.5 10.5-5 3"/></svg> Queue Failures</a></li>
-        <li><a href="/projects" {{if eq .Nav "projects"}}aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg> Projects</a></li>
-        <li><a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> Notifications</a></li>
-        <li><a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg> Settings</a></li>
-      </ul>
+    <aside class="sidebar">
+      <a class="brand" href="/"><img src="{{asset "favicon.svg"}}" alt="" width="24" height="24"><span>Faultbox</span></a>
+      <nav class="nav" aria-label="Main">
+        <p class="nav-label">Monitor</p>
+        <ul>
+          <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>{{template "icon" "overview"}}<span>Overview</span></a></li>
+          <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}>{{template "icon" "issues"}}<span>Issues</span></a></li>
+          <li><a href="/queue-failures" {{if eq .Nav "queue"}}aria-current="page"{{end}}>{{template "icon" "queue"}}<span>Queue Failures</span></a></li>
+        </ul>
+        <p class="nav-label">Configure</p>
+        <ul>
+          <li><a href="/projects" {{if eq .Nav "projects"}}aria-current="page"{{end}}>{{template "icon" "projects"}}<span>Projects</span></a></li>
+          <li><a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>{{template "icon" "notifications"}}<span>Notifications</span></a></li>
+          <li><a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>{{template "icon" "settings"}}<span>Settings</span></a></li>
+        </ul>
+      </nav>
       <div class="sidebar-foot">
         <span class="avatar" aria-hidden="true">{{slice .User.Email 0 1}}</span>
-        <span class="small truncate user-email" title="{{.User.Email}}">{{.User.Email}}</span>
+        <span class="user-meta">
+          <span class="truncate user-email" title="{{.User.Email}}">{{.User.Email}}</span>
+          <span class="version truncate">Faultbox {{.Version}}</span>
+        </span>
         <form method="post" action="/logout">
           {{template "csrf" .CSRF}}
-          <button class="icon-btn" type="submit" title="Log out" aria-label="Log out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg></button>
+          <button class="icon-btn" type="submit" title="Log out" aria-label="Log out">{{template "icon" "logout"}}</button>
         </form>
-        <span class="muted version truncate">{{.Version}}</span>
       </div>
-    </nav>
-    <main class="main" id="main">
-      {{if .Flash}}<div class="alert alert-ok" role="status">{{.Flash}}</div>{{end}}
-      {{template "content" .}}
-    </main>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <form class="topbar-search" method="get" action="/issues" role="search">
+          {{template "icon" "search"}}
+          <label class="sr-only" for="global-search">Search</label>
+          <input id="global-search" type="search" name="q" placeholder="Search exceptions, messages, jobs, URLs, releases…" autocomplete="off" data-hotkey="/">
+          <input type="hidden" name="status" value="all">
+          <input type="hidden" name="category" value="all">
+          <kbd aria-hidden="true">/</kbd>
+        </form>
+        <div class="topbar-actions">
+          <a class="btn btn-ghost" href="/projects/new">{{template "icon" "plus"}}<span>New project</span></a>
+        </div>
+      </header>
+      <main class="main" id="main">
+        {{if .Flash}}<div class="alert alert-ok" role="status">{{.Flash}}</div>{{end}}
+        {{template "content" .}}
+      </main>
+    </div>
   </div>
 {{else}}
   <main class="bare" id="main">{{template "content" .}}</main>

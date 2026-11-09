@@ -68,6 +68,13 @@ type IngestResult struct {
 	Reopened  bool // a resolved issue occurred again (regression)
 	Status    string
 	Count     int64 // issue occurrence count after this event
+
+	// Routing details for notifications (M6), copied from the event.
+	ProjectID   int64
+	Category    string
+	Environment string
+	JobKind     string // terminal, manual or attempt; "" for non-queue events
+	OccurredAt  time.Time
 }
 
 // IngestBatch stores events in one transaction. Duplicate event IDs are
@@ -119,7 +126,10 @@ func nullInt(p *int) any {
 }
 
 func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestResult, error) {
-	res := IngestResult{UUID: e.UUID}
+	res := IngestResult{UUID: e.UUID, ProjectID: e.ProjectID, Category: e.Category, Environment: e.Environment, OccurredAt: e.OccurredAt}
+	if e.Job != nil {
+		res.JobKind = e.Job.Kind
+	}
 
 	var exists int
 	err := tx.QueryRowContext(ctx,

@@ -13,10 +13,10 @@
 </header>
 
 <section class="stats" aria-label="Failed job summary">
-  <div class="stat card"><span class="stat-label">Attempts</span><span class="stat-value">{{if $j.Attempts}}{{$j.Attempts}}{{if $j.MaxTries}}<span class="muted stat-of"> / {{$j.MaxTries}}</span>{{end}}{{else}}—{{end}}</span><span class="stat-note">{{if eq $j.Kind "attempt"}}Will be retried{{else if eq $j.Kind "manual"}}Failed manually with $this->fail(){{else}}Out of retries; won't run again{{end}}</span></div>
-  <div class="stat card"><span class="stat-label">Queue</span><span class="stat-value stat-sm mono">{{if $j.Queue}}{{$j.Queue}}{{else}}—{{end}}</span><span class="stat-note">{{if $j.Connection}}on {{$j.Connection}}{{else}}connection not reported{{end}}</span></div>
-  <div class="stat card"><span class="stat-label">Failed</span><span class="stat-value stat-sm">{{timeago $j.FailedAt}}</span><span class="stat-note">{{datetime $j.FailedAt}}</span></div>
-  <a class="stat card stat-link" href="/issues/{{$i.ID}}"><span class="stat-label">Exception group</span><span class="stat-value stat-sm">{{compact $i.OccurrenceCount}} failure{{if ne $i.OccurrenceCount 1}}s{{end}}</span><span class="stat-note">Same job and exception, since {{timeago $i.FirstSeenAt}}</span></a>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "refresh"}}</span><span class="stat-label">Attempts</span><span class="stat-value">{{if $j.Attempts}}{{$j.Attempts}}{{if $j.MaxTries}}<span class="muted stat-of"> / {{$j.MaxTries}}</span>{{end}}{{else}}—{{end}}</span><span class="stat-note">{{if eq $j.Kind "attempt"}}Will be retried{{else if eq $j.Kind "manual"}}Failed manually with $this->fail(){{else}}Out of retries; won't run again{{end}}</span></div>
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "queue"}}</span><span class="stat-label">Queue</span><span class="stat-value stat-sm mono">{{if $j.Queue}}{{$j.Queue}}{{else}}—{{end}}</span><span class="stat-note">{{if $j.Connection}}on {{$j.Connection}}{{else}}connection not reported{{end}}</span></div>
+  <div class="stat card"><span class="stat-icon">{{template "icon" "clock"}}</span><span class="stat-label">Failed</span><span class="stat-value stat-sm">{{timeago $j.FailedAt}}</span><span class="stat-note">{{datetime $j.FailedAt}}</span></div>
+  <a class="stat card stat-link" href="/issues/{{$i.ID}}"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Exception group</span><span class="stat-value stat-sm">{{compact $i.OccurrenceCount}} failure{{if ne $i.OccurrenceCount 1}}s{{end}}</span><span class="stat-note">Same job and exception, since {{timeago $i.FirstSeenAt}}</span></a>
 </section>
 
 <div class="grid-2 grid-wide-left">

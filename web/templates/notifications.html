@@ -1,0 +1,84 @@
+{{define "content"}}
+{{with .Data}}
+<header class="page-head">
+  <div>
+    <h1>Notifications</h1>
+    <p class="page-sub">Email and webhook alerts for new issues, regressions, failed jobs and spikes.</p>
+  </div>
+  <div class="row">
+    <a class="btn" href="/notifications/channels/new?kind=email">{{template "icon" "plus"}}<span>Email channel</span></a>
+    <a class="btn btn-primary" href="/notifications/channels/new?kind=webhook">{{template "icon" "plus"}}<span>Webhook channel</span></a>
+  </div>
+</header>
+
+<section class="stats" aria-label="Delivery summary">
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "notifications"}}</span><span class="stat-label">Active channels</span><span class="stat-value">{{.Enabled}}</span><span class="stat-note">{{len .Channels}} in total</span></div>
+  <a class="stat card stat-link" href="/notifications?status=sent"><span class="stat-icon tone-ok">{{template "icon" "activity"}}</span><span class="stat-label">Delivered</span><span class="stat-value">{{compact .Stats.Sent}}</span><span class="stat-note">Last 24 hours</span></a>
+  <a class="stat card stat-link" href="/notifications?status=pending"><span class="stat-icon tone-warn">{{template "icon" "refresh"}}</span><span class="stat-label">Waiting to retry</span><span class="stat-value">{{compact .Stats.Pending}}</span><span class="stat-note">Retried with backoff</span></a>
+  <a class="stat card stat-link" href="/notifications?status=failed"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Failed</span><span class="stat-value">{{compact .Stats.Failed}}</span><span class="stat-note">Last 24 hours, after every retry</span></a>
+</section>
+
+{{if .Channels}}
+<section class="card table-wrap">
+  <div class="section-head table-title"><h2>Channels</h2></div>
+  <table>
+    <thead><tr><th>Channel</th><th class="hide-sm">Scope</th><th class="hide-sm">Alerts on</th><th>Status</th><th class="num">Actions</th></tr></thead>
+    <tbody>
+    {{range .Channels}}
+      <tr>
+        <td class="issue-cell">
+          <a class="issue-title" href="/notifications/channels/{{.ID}}">{{.Name}}</a> <span class="badge">{{if eq .Kind "email"}}Email{{else}}Webhook{{end}}</span>
+          <div class="muted small mono truncate">{{if eq .Kind "email"}}{{join .Config.To ", "}}{{else}}{{.Config.URL}}{{end}}</div>
+        </td>
+        <td class="hide-sm small">
+          {{if .ProjectID}}{{index $.Data.Names .ProjectID}}{{else}}All projects{{end}}
+          <div class="muted">{{if .Environments}}{{join .Environments ", "}}{{else}}Any environment{{end}}</div>
+        </td>
+        <td class="hide-sm">
+          {{if .OnNewIssue}}<span class="tag">new issue</span>{{end}}
+          {{if .OnRegression}}<span class="tag">regression</span>{{end}}
+          {{if .OnQueueFailure}}<span class="tag">failed job</span>{{end}}
+          {{if .ThresholdCount}}<span class="tag">{{.ThresholdCount}}+ in {{.ThresholdWindow}}m</span>{{end}}
+          <div class="muted small">At most one alert per issue every {{.Cooldown}} min</div>
+        </td>
+        <td>{{if .Enabled}}<span class="badge badge-ok">On</span>{{else}}<span class="badge">Off</span>{{end}}</td>
+        <td class="num">
+          <span class="row actions-row">
+            <form method="post" action="/notifications/channels/{{.ID}}/test">{{template "csrf" $.CSRF}}<button class="btn btn-sm" type="submit">Send test</button></form>
+            <form method="post" action="/notifications/channels/{{.ID}}/enabled">{{template "csrf" $.CSRF}}
+              {{if .Enabled}}<input type="hidden" name="enabled" value="0"><button class="btn btn-sm" type="submit">Turn off</button>
+              {{else}}<input type="hidden" name="enabled" value="1"><button class="btn btn-sm" type="submit">Turn on</button>{{end}}
+            </form>
+          </span>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{else}}
+<section class="card empty">
+  <span class="badge">No channels yet</span>
+  <h2>Get alerted when something breaks</h2>
+  <p class="muted">Add an email channel with your SMTP server, or a webhook for Slack-compatible endpoints, PagerDuty, or your own service. Each channel chooses its projects, environments and triggers.</p>
+  <div class="row center-row">
+    <a class="btn" href="/notifications/channels/new?kind=email">Add an email channel</a>
+    <a class="btn btn-primary" href="/notifications/channels/new?kind=webhook">Add a webhook</a>
+  </div>
+</section>
+{{end}}
+
+<section class="card table-wrap" id="history">
+  <div class="section-head table-title">
+    <h2>Delivery history</h2>
+    <nav class="row seg" aria-label="Filter deliveries">
+      <a href="/notifications#history" {{if eq .Status ""}}aria-current="true"{{end}}>All</a>
+      <a href="/notifications?status=failed#history" {{if eq .Status "failed"}}aria-current="true"{{end}}>Failed</a>
+      <a href="/notifications?status=pending#history" {{if eq .Status "pending"}}aria-current="true"{{end}}>Retrying</a>
+      <a href="/notifications?status=sent#history" {{if eq .Status "sent"}}aria-current="true"{{end}}>Delivered</a>
+    </nav>
+  </div>
+  {{template "delivery_rows" (dict "Rows" .History "CSRF" $.CSRF "ShowChannel" true)}}
+</section>
+{{end}}
+{{end}}

@@ -16,6 +16,7 @@ import (
 	"github.com/sylvesteragyiri/faultbox/internal/config"
 	"github.com/sylvesteragyiri/faultbox/internal/dashboard"
 	"github.com/sylvesteragyiri/faultbox/internal/ingest"
+	"github.com/sylvesteragyiri/faultbox/internal/notify"
 	"github.com/sylvesteragyiri/faultbox/internal/server"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
@@ -28,6 +29,7 @@ type App struct {
 	queue     *ingest.Queue
 	metrics   *ingest.Metrics
 	processor *ingest.Processor
+	notifier  *notify.Notifier
 	handler   http.Handler
 	closed    bool
 }
@@ -49,7 +51,12 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 
 	a := &App{cfg: cfg, logger: logger, store: st, metrics: &ingest.Metrics{}}
 	a.queue = ingest.NewQueue(cfg.QueueSize, cfg.QueueMaxBytes)
-	a.processor = ingest.NewProcessor(a.queue, st, a.metrics, logger, ingest.ProcessorOptions{})
+	a.notifier = notify.New(notify.Options{
+		Store: st, Logger: logger, Key: keys.Encryption, PublicURL: cfg.PublicURL, Version: version,
+	})
+	// The processor only hands stored results to the notifier, which never
+	// blocks, so alerts can't slow down ingestion (PRD §4.7).
+	a.processor = ingest.NewProcessor(a.queue, st, a.metrics, logger, ingest.ProcessorOptions{OnResults: a.notifier.Handle})
 	if err := a.bootstrapAdmin(ctx); err != nil {
 		_ = st.Close()
 		return nil, err
@@ -65,6 +72,8 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		RetentionDays: cfg.RetentionDays,
 		PublicURL:     cfg.PublicURL,
 		Metrics:       func() ingest.Snapshot { return a.metrics.Snapshot(a.queue) },
+		EncryptionKey: keys.Encryption,
+		Notifier:      a.notifier,
 	})
 	if err != nil {
 		_ = st.Close()
@@ -90,6 +99,10 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 			}},
 		},
 	})
+	if err := a.notifier.Start(); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	a.processor.Start()
 	return a, nil
 }
@@ -106,6 +119,18 @@ func (a *App) Metrics() ingest.Snapshot { return a.metrics.Snapshot(a.queue) }
 // Flush waits until every event accepted so far has been written. Tests use it.
 func (a *App) Flush(ctx context.Context) error { return a.processor.Flush(ctx) }
 
+// FlushNotifications waits until alerts for every stored event have been
+// raised and every due delivery attempted. Tests use it.
+func (a *App) FlushNotifications(ctx context.Context) error {
+	if err := a.processor.Flush(ctx); err != nil {
+		return err
+	}
+	return a.notifier.Flush(ctx)
+}
+
+// NotifyStats returns the notifier's counters.
+func (a *App) NotifyStats() notify.Snapshot { return a.notifier.Stats() }
+
 // Shutdown stops accepting events, drains the queue within ctx's deadline
 // and closes the database. Call it after the HTTP server has stopped.
 func (a *App) Shutdown(ctx context.Context) error {
@@ -114,7 +139,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	a.closed = true
 	drainErr := a.processor.Shutdown(ctx)
-	return errors.Join(drainErr, a.store.Close())
+	// After the processor: alerts for the last stored events are recorded
+	// first. Anything not yet delivered stays pending for the next start.
+	notifyErr := a.notifier.Shutdown(ctx)
+	return errors.Join(drainErr, notifyErr, a.store.Close())
 }
 
 // Close is Shutdown with the configured drain timeout.

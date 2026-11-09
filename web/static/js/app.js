@@ -57,6 +57,19 @@
     if (fig) hideTip(fig);
   });
 
+  // Press the key in data-hotkey (e.g. "/") to focus that field, unless
+  // the user is already typing somewhere.
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+    var t = e.target;
+    if (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    var field = document.querySelector('[data-hotkey="' + CSS.escape(e.key) + '"]');
+    if (!field) return;
+    e.preventDefault();
+    field.focus();
+    if (field.select) field.select();
+  });
+
   // <form data-confirm="..."> asks before a plain (non-HTMX) submit.
   document.addEventListener("submit", function (e) {
     var msg = e.target.getAttribute("data-confirm");

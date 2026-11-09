@@ -12,10 +12,10 @@
 </header>
 
 <section class="stats" aria-label="Issue summary">
-  <div class="stat card"><span class="stat-label">Events</span><span class="stat-value">{{compact $i.OccurrenceCount}}</span></div>
-  <div class="stat card"><span class="stat-label">First seen</span><span class="stat-value stat-sm">{{timeago $i.FirstSeenAt}}</span><span class="stat-note">{{datetime $i.FirstSeenAt}}</span></div>
-  <div class="stat card"><span class="stat-label">Last seen</span><span class="stat-value stat-sm">{{timeago $i.LastSeenAt}}</span><span class="stat-note">{{datetime $i.LastSeenAt}}</span></div>
-  <div class="stat card"><span class="stat-label">Releases</span><span class="stat-value stat-sm mono">{{if $i.FirstRelease}}{{$i.FirstRelease}}{{else}}—{{end}}</span><span class="stat-note">{{if $i.LastRelease}}latest {{$i.LastRelease}}{{else}}no release reported{{end}}</span></div>
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "activity"}}</span><span class="stat-label">Events</span><span class="stat-value">{{compact $i.OccurrenceCount}}</span></div>
+  <div class="stat card"><span class="stat-icon">{{template "icon" "clock"}}</span><span class="stat-label">First seen</span><span class="stat-value stat-sm">{{timeago $i.FirstSeenAt}}</span><span class="stat-note">{{datetime $i.FirstSeenAt}}</span></div>
+  <div class="stat card"><span class="stat-icon">{{template "icon" "clock"}}</span><span class="stat-label">Last seen</span><span class="stat-value stat-sm">{{timeago $i.LastSeenAt}}</span><span class="stat-note">{{datetime $i.LastSeenAt}}</span></div>
+  <div class="stat card"><span class="stat-icon">{{template "icon" "tag"}}</span><span class="stat-label">Releases</span><span class="stat-value stat-sm mono">{{if $i.FirstRelease}}{{$i.FirstRelease}}{{else}}—{{end}}</span><span class="stat-note">{{if $i.LastRelease}}latest {{$i.LastRelease}}{{else}}no release reported{{end}}</span></div>
 </section>
 
 <section class="card">

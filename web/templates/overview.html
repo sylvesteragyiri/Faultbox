@@ -1,11 +1,11 @@
 {{define "content"}}
-<header class="page-head"><h1>Overview</h1></header>
+<header class="page-head"><div><h1>Overview</h1><p class="page-sub">Errors and failed jobs across every project.</p></div></header>
 {{with .Data}}
 <section class="stats" aria-label="Summary">
-  <a class="stat card stat-link" href="/issues"><span class="stat-label">Unresolved issues</span><span class="stat-value">{{compact .Stats.Unresolved}}</span><span class="stat-note">{{compact .Stats.Total}} issues in total</span></a>
-  <a class="stat card stat-link" href="/issues?sort=first_seen&amp;range=24h"><span class="stat-label">New issues today</span><span class="stat-value">{{compact .Stats.NewToday}}</span><span class="stat-note">First seen since 00:00 UTC</span></a>
-  <div class="stat card"><span class="stat-label">Total events</span><span class="stat-value">{{compact .Stats.Events}}</span><span class="stat-note">{{.ActiveProjects}} active project{{if ne .ActiveProjects 1}}s{{end}}</span></div>
-  <a class="stat card stat-link" href="/queue-failures"><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Stats.QueueFailures}}</span><span class="stat-note">Terminal and manual failures</span></a>
+  <a class="stat card stat-link" href="/issues"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Unresolved issues</span><span class="stat-value">{{compact .Stats.Unresolved}}</span><span class="stat-note">{{compact .Stats.Total}} issues in total</span></a>
+  <a class="stat card stat-link" href="/issues?sort=first_seen&amp;range=24h"><span class="stat-icon tone-accent">{{template "icon" "sparkle"}}</span><span class="stat-label">New issues today</span><span class="stat-value">{{compact .Stats.NewToday}}</span><span class="stat-note">First seen since 00:00 UTC</span></a>
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "activity"}}</span><span class="stat-label">Total events</span><span class="stat-value">{{compact .Stats.Events}}</span><span class="stat-note">{{.ActiveProjects}} active project{{if ne .ActiveProjects 1}}s{{end}}</span></div>
+  <a class="stat card stat-link" href="/queue-failures"><span class="stat-icon tone-warn">{{template "icon" "queue"}}</span><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Stats.QueueFailures}}</span><span class="stat-note">Terminal and manual failures</span></a>
 </section>
 
 {{if eq .ActiveProjects 0}}

@@ -22,10 +22,10 @@
 </header>
 
 <section class="stats" aria-label="Summary">
-  <a class="stat card stat-link" href="{{.ListURL}}"><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Summary.Failures}}</span><span class="stat-note">Terminal and manual, 30 days</span></a>
-  <div class="stat card"><span class="stat-label">Failing job classes</span><span class="stat-value">{{compact .Summary.JobTypes}}</span><span class="stat-note">Distinct jobs with a failure</span></div>
-  <a class="stat card stat-link" href="/queue-failures/jobs?kind=attempt{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-label">Failed retries</span><span class="stat-value">{{compact .Summary.Attempts}}</span><span class="stat-note">Attempts that will run again</span></a>
-  <a class="stat card stat-link" href="/issues?category=queue_failure{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-label">Unresolved job issues</span><span class="stat-value">{{compact .Summary.Unresolved}}</span><span class="stat-note">Grouped by job and exception</span></a>
+  <a class="stat card stat-link" href="{{.ListURL}}"><span class="stat-icon tone-danger">{{template "icon" "queue"}}</span><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Summary.Failures}}</span><span class="stat-note">Terminal and manual, 30 days</span></a>
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "layers"}}</span><span class="stat-label">Failing job classes</span><span class="stat-value">{{compact .Summary.JobTypes}}</span><span class="stat-note">Distinct jobs with a failure</span></div>
+  <a class="stat card stat-link" href="/queue-failures/jobs?kind=attempt{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-icon tone-warn">{{template "icon" "refresh"}}</span><span class="stat-label">Failed retries</span><span class="stat-value">{{compact .Summary.Attempts}}</span><span class="stat-note">Attempts that will run again</span></a>
+  <a class="stat card stat-link" href="/issues?category=queue_failure{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-icon tone-accent">{{template "icon" "inbox"}}</span><span class="stat-label">Unresolved job issues</span><span class="stat-value">{{compact .Summary.Unresolved}}</span><span class="stat-note">Grouped by job and exception</span></a>
 </section>
 
 <section class="card">

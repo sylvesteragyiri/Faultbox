@@ -1,0 +1,31 @@
+{{/* Delivery history rows, shared by the notifications and channel pages. */}}
+{{define "delivery_rows"}}
+{{if .Rows}}
+<table>
+  <thead><tr><th>When</th>{{if .ShowChannel}}<th class="hide-sm">Channel</th>{{end}}<th>Alert</th><th>Status</th><th class="num hide-sm">Attempts</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+    <tr>
+      <td class="nowrap muted"><time datetime="{{isoTime .CreatedAt}}" title="{{datetime .CreatedAt}}">{{timeago .CreatedAt}}</time></td>
+      {{if $.ShowChannel}}<td class="hide-sm small"><a href="/notifications/channels/{{.ChannelID}}">{{.ChannelName}}</a></td>{{end}}
+      <td class="issue-cell">
+        <span class="tag">{{triggerLabel .Trigger}}</span>
+        {{if .IssueID}}<a class="issue-title small" href="/issues/{{.IssueID}}">{{truncate .Subject 110}}</a>{{else}}<span class="small">{{truncate .Subject 110}}</span>{{end}}
+        {{if .LastError}}<div class="small error-text">{{.LastError}}</div>{{end}}
+      </td>
+      <td class="nowrap">
+        {{if eq .Status "sent"}}<span class="badge badge-ok" title="{{datetime .SentAt}}">Delivered</span>
+        {{else if eq .Status "pending"}}<span class="badge badge-warn">{{if .Attempts}}Retrying{{else}}Queued{{end}}</span>{{if .Attempts}}<div class="muted small">next <time datetime="{{isoTime .NextAttemptAt}}">{{datetime .NextAttemptAt}}</time></div>{{end}}
+        {{else}}<span class="badge badge-off">Failed</span>
+          <form method="post" action="/notifications/history/{{.ID}}/retry" class="inline-form">{{template "csrf" $.CSRF}}<button class="btn-link small" type="submit">Retry</button></form>
+        {{end}}
+      </td>
+      <td class="num hide-sm">{{.Attempts}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted table-empty">No deliveries yet. Alerts appear here as soon as a channel fires.</p>
+{{end}}
+{{end}}

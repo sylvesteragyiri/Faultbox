@@ -37,6 +37,17 @@ type Options struct {
 	PublicURL string
 	// Metrics reports ingestion counters for the Settings page.
 	Metrics func() ingest.Snapshot
+	// EncryptionKey seals channel secrets (D17).
+	EncryptionKey []byte
+	// Notifier sends test alerts and retries deliveries (M6).
+	Notifier Notifier
+}
+
+// Notifier is what the dashboard needs from the notification service.
+type Notifier interface {
+	SendTest(ctx context.Context, channelID int64) (int64, error)
+	Retry(ctx context.Context, id int64) error
+	InvalidateChannels()
 }
 
 // Handler is the dashboard's root handler.
@@ -97,8 +108,16 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /queue-failures", h.queueDashboard)
 	authed.HandleFunc("GET /queue-failures/jobs", h.failedJobList)
 	authed.HandleFunc("GET /queue-failures/{id}", h.failedJobShow)
-	authed.HandleFunc("GET /notifications", h.comingSoon("notifications", "Notifications", "M6",
-		"Email and webhook alerts for new issues, regressions and failed jobs."))
+	authed.HandleFunc("GET /notifications", h.notificationsPage)
+	authed.HandleFunc("GET /notifications/channels/new", h.channelNew)
+	authed.HandleFunc("POST /notifications/channels", h.channelCreate)
+	authed.HandleFunc("GET /notifications/channels/{id}", h.channelShow)
+	authed.HandleFunc("POST /notifications/channels/{id}", h.channelUpdate)
+	authed.HandleFunc("POST /notifications/channels/{id}/enabled", h.channelSetEnabled)
+	authed.HandleFunc("POST /notifications/channels/{id}/delete", h.channelDelete)
+	authed.HandleFunc("POST /notifications/channels/{id}/test", h.channelTest)
+	authed.HandleFunc("POST /notifications/channels/{id}/secret", h.channelRotateSecret)
+	authed.HandleFunc("POST /notifications/history/{id}/retry", h.notificationRetry)
 	authed.HandleFunc("GET /settings", h.settings)
 	authed.HandleFunc("/", h.notFound)
 	mux.Handle("/", h.requireUser(authed))
@@ -123,7 +142,8 @@ func cacheStatic(next http.Handler) http.Handler {
 
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
-	"coming_soon", "settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
+	"settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
+	"notifications", "notification_channel", "notification_secret",
 }
 
 // assetURL returns a function mapping a static path to its URL with a
@@ -183,6 +203,22 @@ func (h *Handler) parseTemplates() error {
 			return m
 		},
 		"hasString": slices.Contains[[]string],
+		"lower":     strings.ToLower,
+		"triggerLabel": func(t string) string {
+			switch t {
+			case store.TriggerNewIssue:
+				return "new issue"
+			case store.TriggerRegression:
+				return "regression"
+			case store.TriggerQueueFailure:
+				return "failed job"
+			case store.TriggerThreshold:
+				return "threshold"
+			case store.TriggerTest:
+				return "test"
+			}
+			return t
+		},
 		"truncate": func(s string, n int) string {
 			if r := []rune(s); len(r) > n {
 				return string(r[:n]) + "…"
@@ -322,14 +358,6 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		"Recent":           h.issueRows(names, recent.Issues),
 		"Failures":         failures,
 	}))
-}
-
-func (h *Handler) comingSoon(nav, title, milestone, text string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		h.render(w, http.StatusOK, "coming_soon", "", h.newPage(r, title, nav, map[string]any{
-			"Milestone": milestone, "Text": text,
-		}))
-	}
 }
 
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
