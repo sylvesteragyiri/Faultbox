@@ -684,6 +684,7 @@ fieldset > legend { font-weight: 600; font-size: .84rem; padding: 0 .35rem; }
 .center-row { justify-content: center; }
 .inline-form { display: inline; margin-left: .35rem; }
 .error-text { color: var(--danger); margin-top: .2rem; overflow-wrap: anywhere; }
+.warn-text { color: var(--warn); }
 .plain-list { margin: 0; padding-left: 1.1rem; display: grid; gap: .45rem; color: var(--text-2); }
 .danger-zone { border-color: color-mix(in srgb, var(--danger) 30%, var(--border)); }
 .narrow-wide { max-width: 760px; }

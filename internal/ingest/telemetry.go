@@ -8,19 +8,23 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
 
 // Limits for telemetry batches (POST /api/v1/telemetry).
 const (
-	MaxItemsPerList      = 500 // per list: notifications, mails, commands
+	MaxItemsPerList      = 500 // per list: notifications, mails, commands, cache
 	maxClassLen          = 255
 	maxChannelLen        = 64
 	maxCommandLen        = 128
 	maxNotificationError = 1000
 	maxRecipients        = 10_000
 	maxCommandDuration   = 7 * 24 * time.Hour
+	maxCacheKeyLen       = 200
+	maxCacheCount        = 1_000_000_000
 )
 
 // TelemetryBatch is the body of POST /api/v1/telemetry (and of the older
@@ -35,6 +39,7 @@ type TelemetryBatch struct {
 	Notifications []NotificationItem `json:"notifications"`
 	Mails         []MailItem         `json:"mails"`
 	Commands      []CommandItem      `json:"commands"`
+	Cache         []CacheItem        `json:"cache"`
 }
 
 // NotificationItem is one Laravel notification on one channel.
@@ -69,6 +74,19 @@ type CommandItem struct {
 	ExitCode   *int       `json:"exit_code"`
 	DurationMs int64      `json:"duration_ms"`
 	Error      *ItemError `json:"error"`
+}
+
+// CacheItem totals what the app did with one cache store and key pattern
+// since its last flush.
+type CacheItem struct {
+	Timestamp string `json:"timestamp"` // when the totals were taken
+	Store     string `json:"store"`
+	Key       string `json:"key"` // a pattern such as users:*:profile, never a raw key with IDs
+	Hits      int64  `json:"hits"`
+	Misses    int64  `json:"misses"`
+	Writes    int64  `json:"writes"`
+	Deletes   int64  `json:"deletes"`
+	Failures  int64  `json:"failures"` // failed writes and deletes
 }
 
 // ItemError says why something failed.
@@ -110,10 +128,10 @@ func ValidateTelemetry(b *TelemetryBatch, allowedEnvs []string, now time.Time) (
 		v.fail("environment", "%q is not configured for this project (allowed: %s)", env, strings.Join(allowedEnvs, ", "))
 	}
 	release := truncate(strings.TrimSpace(b.Release), 200)
-	if len(b.Notifications)+len(b.Mails)+len(b.Commands) == 0 {
-		v.fail("notifications", "the batch must contain at least one notification, mail or command")
+	if len(b.Notifications)+len(b.Mails)+len(b.Commands)+len(b.Cache) == 0 {
+		v.fail("notifications", "the batch must contain at least one notification, mail, command or cache entry")
 	}
-	for name, n := range map[string]int{"notifications": len(b.Notifications), "mails": len(b.Mails), "commands": len(b.Commands)} {
+	for name, n := range map[string]int{"notifications": len(b.Notifications), "mails": len(b.Mails), "commands": len(b.Commands), "cache": len(b.Cache)} {
 		if n > MaxItemsPerList {
 			v.fail(name, "may contain at most %d items", MaxItemsPerList)
 		}
@@ -185,6 +203,25 @@ func ValidateTelemetry(b *TelemetryBatch, allowedEnvs []string, now time.Time) (
 			c.ErrorMessage = truncate(strings.TrimSpace(it.Error.Message), maxNotificationError)
 		}
 		out.Commands = append(out.Commands, c)
+	}
+	for i, it := range b.Cache {
+		if v.full() {
+			break
+		}
+		at := func(f string) string { return fmt.Sprintf("cache[%d].%s", i, f) }
+		c := store.NewCacheCount{Environment: env, Hits: it.Hits, Misses: it.Misses, Writes: it.Writes, Deletes: it.Deletes, Failures: it.Failures}
+		c.At = v.timestamp(at("timestamp"), it.Timestamp)
+		c.Store = v.channel(at("store"), it.Store)
+		if it.Key == "" || len(it.Key) > maxCacheKeyLen || !utf8.ValidString(it.Key) || strings.IndexFunc(it.Key, unicode.IsControl) >= 0 {
+			v.fail(at("key"), "must be a key pattern of 1 to %d printable characters", maxCacheKeyLen)
+		}
+		c.Key = it.Key
+		for name, n := range map[string]int64{"hits": it.Hits, "misses": it.Misses, "writes": it.Writes, "deletes": it.Deletes, "failures": it.Failures} {
+			if n < 0 || n > maxCacheCount {
+				v.fail(at(name), "must be a count from 0 to %d", maxCacheCount)
+			}
+		}
+		out.Cache = append(out.Cache, c)
 	}
 	if len(v.errs) > 0 {
 		return store.TelemetryBatch{}, &ValidationError{Fields: v.errs}

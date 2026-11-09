@@ -147,3 +147,50 @@ func (h *Handler) commands(w http.ResponseWriter, r *http.Request) {
 		"Env":        sc.Environment,
 	}))
 }
+
+func (h *Handler) cache(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sc, names, days, err := h.telemetryScope(r)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	sort := store.CacheByOperations
+	switch store.CacheSort(r.URL.Query().Get("sort")) {
+	case store.CacheByMisses:
+		sort = store.CacheByMisses
+	case store.CacheByFailures:
+		sort = store.CacheByFailures
+	}
+	summary, err := h.store.CacheSummary(ctx, sc, days)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	trend, err := h.store.CacheTrend(ctx, sc, days)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	stores, err := h.store.CacheStores(ctx, sc, days)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	stats, err := h.store.CacheStats(ctx, sc, days, sort, 100)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	h.render(w, http.StatusOK, "cache", "", h.newPage(r, "Cache", "cache", map[string]any{
+		"Range":     days,
+		"Sort":      string(sort),
+		"Summary":   summary,
+		"Chart":     newBarChart(fmt.Sprintf("Cache reads per day, last %d days", days), trend, []string{"Hits", "Misses"}),
+		"Stores":    stores,
+		"Stats":     stats,
+		"OtherKey":  store.CacheOtherKey,
+		"ScopeName": names[sc.ProjectID],
+		"Env":       sc.Environment,
+	}))
+}

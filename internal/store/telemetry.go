@@ -7,7 +7,8 @@ import (
 )
 
 // Telemetry is what the monitored apps do besides throwing: the Laravel
-// notifications and mail they send and the artisan commands they run. It
+// notifications and mail they send, the artisan commands they run and how
+// they use the cache (cache.go). It
 // arrives in batches (POST /api/v1/telemetry); daily rollups keep the
 // dashboard cheap, and failures (plus every command run) are kept one by one.
 
@@ -61,6 +62,7 @@ type TelemetryBatch struct {
 	Notifications []NewAppNotification
 	Mails         []NewAppMail
 	Commands      []NewCommandRun
+	Cache         []NewCacheCount
 }
 
 // IngestTelemetry stores a batch in one transaction. A batch ID that was
@@ -98,6 +100,11 @@ func (s *Store) IngestTelemetry(ctx context.Context, projectID int64, b Telemetr
 		}
 		for _, c := range b.Commands {
 			if err := ingestCommand(ctx, tx, projectID, c); err != nil {
+				return err
+			}
+		}
+		for _, c := range b.Cache {
+			if err := ingestCache(ctx, tx, projectID, c); err != nil {
 				return err
 			}
 		}
@@ -491,6 +498,7 @@ func (s *Store) KnownEnvironments(ctx context.Context, projectID int64) ([]strin
 	            UNION SELECT environment FROM app_notification_daily_counts WHERE ?1 = 0 OR project_id = ?1
 	            UNION SELECT environment FROM app_mail_daily_counts WHERE ?1 = 0 OR project_id = ?1
 	            UNION SELECT environment FROM app_command_daily_counts WHERE ?1 = 0 OR project_id = ?1
+	            UNION SELECT environment FROM app_cache_daily_counts WHERE ?1 = 0 OR project_id = ?1
 	            UNION SELECT name FROM project_environments WHERE ?1 = 0 OR project_id = ?1
 	          ) ORDER BY 1 LIMIT 50`
 	return s.strings(ctx, query, projectID)

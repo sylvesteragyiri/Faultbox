@@ -113,6 +113,96 @@ func TestTelemetryMailAndCommands(t *testing.T) {
 	}
 }
 
+func cacheItem(storeName, key string, hits, misses, writes, deletes, failures int64) map[string]any {
+	return map[string]any{
+		"timestamp": time.Now().UTC().Format(time.RFC3339Nano), "store": storeName, "key": key,
+		"hits": hits, "misses": misses, "writes": writes, "deletes": deletes, "failures": failures,
+	}
+}
+
+func cacheBatch(env string, items ...map[string]any) map[string]any {
+	b := telemetryBatch(env, nil, nil, nil)
+	b["cache"] = items
+	return b
+}
+
+func TestTelemetryCache(t *testing.T) {
+	t.Parallel()
+	a := testutil.NewApp(t)
+	_, key := testutil.NewProjectKey(t, a.Store(), "Shop")
+
+	first := cacheBatch("production",
+		cacheItem("redis", "users:*:profile", 90, 10, 10, 0, 0),
+		cacheItem("redis", "settings", 5, 45, 45, 0, 0),
+		cacheItem("file", "reports:*", 0, 0, 3, 2, 1),
+	)
+	resp := a.Post(telemetryPath, key, testutil.MustJSON(t, first))
+	if resp.StatusCode != http.StatusAccepted || !contains(resp.Body, `"count":3`) {
+		t.Fatalf("accept: %d %s", resp.StatusCode, resp.Body)
+	}
+	a.Post(telemetryPath, key, testutil.MustJSON(t, first)) // a retry: counted once
+	// A later flush adds to the same pattern.
+	a.Post(telemetryPath, key, testutil.MustJSON(t, cacheBatch("production", cacheItem("redis", "users:*:profile", 10, 0, 0, 0, 0))))
+	a.LoginAdmin()
+
+	page := a.Get("/cache").Body
+	// users:*:profile: 100 hits, 10 misses → 90.9%; settings: 5 of 50 → 10%;
+	// overall 105 of 160 → 65.6%.
+	for _, want := range []string{
+		"<h1>Cache</h1>", "users:*:profile", "settings", "reports:*", ">redis<", ">file<",
+		"90.9%", `<strong class="warn-text">10%</strong>`, "65.6%",
+		`href="/cache" aria-current="page"`,
+	} {
+		if !contains(page, want) {
+			t.Errorf("cache page is missing %q", want)
+		}
+	}
+	row := func(body, key string) int {
+		i := strings.Index(body, `<span class="issue-title mono">`+key+`</span>`)
+		if i < 0 {
+			t.Fatalf("no row for %s", key)
+		}
+		return i
+	}
+	if row(page, "users:*:profile") > row(page, "settings") {
+		t.Error("the busiest pattern should come first")
+	}
+	if misses := a.Get("/cache?sort=misses").Body; row(misses, "settings") > row(misses, "users:*:profile") {
+		t.Error("sorted by misses, settings should come first")
+	}
+	if failed := a.Get("/cache?sort=failures").Body; row(failed, "reports:*") > row(failed, "users:*:profile") {
+		t.Error("sorted by failed writes, reports should come first")
+	}
+}
+
+func TestTelemetryCacheCapsKeyPatterns(t *testing.T) {
+	t.Parallel()
+	a := testutil.NewApp(t)
+	_, key := testutil.NewProjectKey(t, a.Store(), "Shop")
+	// An app that leaks IDs into its keys: past the daily cap, new patterns
+	// are counted under (other) instead of growing the table.
+	for batch := 0; batch < 3; batch++ {
+		var items []map[string]any
+		for i := 0; i < 400; i++ {
+			items = append(items, cacheItem("redis", fmt.Sprintf("leak:%d", batch*400+i), 1, 0, 0, 0, 0))
+		}
+		if resp := a.Post(telemetryPath, key, testutil.MustJSON(t, cacheBatch("production", items...))); resp.StatusCode != http.StatusAccepted {
+			t.Fatalf("batch %d: %d %s", batch, resp.StatusCode, resp.Body)
+		}
+	}
+	a.LoginAdmin()
+	page := a.Get("/cache").Body
+	if !contains(page, "(other)") || !contains(page, "new patterns past the daily limit") {
+		t.Error("patterns past the cap should be counted under (other)")
+	}
+	if !contains(page, "1,001 key patterns") && !contains(page, "1001 key patterns") {
+		t.Errorf("want the cap plus (other) as distinct patterns")
+	}
+	if !contains(page, `<span class="stat-value">100%</span>`) {
+		t.Error("every read was a hit, (other) included")
+	}
+}
+
 func TestTelemetryValidation(t *testing.T) {
 	t.Parallel()
 	a := testutil.NewApp(t)
@@ -131,6 +221,9 @@ func TestTelemetryValidation(t *testing.T) {
 		{"negative duration", telemetryBatch("production", nil, nil, []map[string]any{commandItem("migrate", 0, -5, "")}), "commands[0].duration_ms"},
 		{"negative recipients", telemetryBatch("production", nil, []map[string]any{mailItem(`App\Mail\X`, "smtp", "sent", -1)}, nil), "mails[0].recipients"},
 		{"bad mail status", telemetryBatch("production", nil, []map[string]any{mailItem(`App\Mail\X`, "smtp", "queued", 1)}, nil), "mails[0].status"},
+		{"negative cache count", cacheBatch("production", cacheItem("redis", "users:*", -1, 0, 0, 0, 0)), "cache[0].hits"},
+		{"empty cache key", cacheBatch("production", cacheItem("redis", "", 1, 0, 0, 0, 0)), "cache[0].key"},
+		{"bad cache store", cacheBatch("production", cacheItem("my store", "users:*", 1, 0, 0, 0, 0)), "cache[0].store"},
 	}
 	for _, c := range cases {
 		resp := a.Post(telemetryPath, key, testutil.MustJSON(t, c.body))
@@ -159,5 +252,10 @@ func TestTelemetryPagesFollowTheScope(t *testing.T) {
 	}
 	if cmds := a.Get("/commands").Body; !contains(cmds, "shop:reindex") || contains(cmds, "admin:report") {
 		t.Error("commands should follow the scoped project")
+	}
+	a.Post(telemetryPath, shopKey, testutil.MustJSON(t, cacheBatch("production", cacheItem("redis", "shop:cart:*", 1, 0, 0, 0, 0))))
+	a.Post(telemetryPath, adminKey, testutil.MustJSON(t, cacheBatch("production", cacheItem("redis", "admin:stats", 1, 0, 0, 0, 0))))
+	if c := a.Get("/cache").Body; !contains(c, "shop:cart:*") || contains(c, "admin:stats") {
+		t.Error("cache should follow the scoped project")
 	}
 }

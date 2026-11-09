@@ -83,7 +83,7 @@ func (h *Handler) telemetryHandler() http.HandlerFunc {
 				"The batch could not be stored. Retry the same batch (same batch_id) later.")
 			return
 		}
-		resp := TelemetryResponse{Status: "accepted", Count: len(valid.Notifications) + len(valid.Mails) + len(valid.Commands)}
+		resp := TelemetryResponse{Status: "accepted", Count: len(valid.Notifications) + len(valid.Mails) + len(valid.Commands) + len(valid.Cache)}
 		if duplicate {
 			resp.Status = "duplicate"
 		}

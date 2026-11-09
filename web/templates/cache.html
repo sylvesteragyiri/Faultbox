@@ -1,0 +1,87 @@
+{{define "content"}}
+{{with .Data}}
+<header class="page-head">
+  <div>
+    <h1>Cache</h1>
+    <p class="page-sub">How your app used its cache{{with .ScopeName}} in {{.}}{{end}}{{with .Env}} ({{.}}){{end}}, per store and key pattern. Keys are reduced to patterns, so <code>users:42:profile</code> is counted as <code>users:*:profile</code>.</p>
+  </div>
+</header>
+
+<section class="stats" aria-label="Summary">
+  <div class="stat card"><span class="stat-icon tone-ok">{{template "icon" "check"}}</span><span class="stat-label">Hit rate</span><span class="stat-value">{{.Summary.HitPercent}}%</span><span class="stat-note">{{compact .Summary.Hits}} hits of {{compact .Summary.Reads}} reads</span></div>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "search"}}</span><span class="stat-label">Misses</span><span class="stat-value">{{compact .Summary.Misses}}</span><span class="stat-note">Last {{.Range}} days</span></div>
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "database"}}</span><span class="stat-label">Writes</span><span class="stat-value">{{compact .Summary.Writes}}</span><span class="stat-note">{{compact .Summary.Deletes}} deletes</span></div>
+  <div class="stat card"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Failed writes</span><span class="stat-value">{{compact .Summary.Failures}}</span><span class="stat-note">{{.Summary.Keys}} key patterns, {{.Summary.Stores}} {{if eq .Summary.Stores 1}}store{{else}}stores{{end}}</span></div>
+</section>
+
+{{if .Summary.Operations}}
+<section class="card">
+  <div class="section-head">
+    <h2>Reads per day</h2>
+    <nav class="seg" aria-label="Chart range">
+      <a href="/cache?range=7d&amp;sort={{.Sort}}" {{if eq .Range 7}}aria-current="true"{{end}}>7 days</a>
+      <a href="/cache?range=14d&amp;sort={{.Sort}}" {{if eq .Range 14}}aria-current="true"{{end}}>14 days</a>
+      <a href="/cache?sort={{.Sort}}" {{if eq .Range 30}}aria-current="true"{{end}}>30 days</a>
+    </nav>
+  </div>
+  {{template "bar_chart" .Chart}}
+</section>
+
+<section class="card table-wrap">
+  <div class="section-head table-title"><h2>By store</h2></div>
+  <table>
+    <thead><tr><th>Store</th><th class="num">Hit rate</th><th class="num">Hits</th><th class="num">Misses</th><th class="num hide-sm">Writes</th><th class="num hide-sm">Deletes</th><th class="num">Failed</th><th class="num hide-sm">Patterns</th></tr></thead>
+    <tbody>
+    {{range .Stores}}
+      <tr>
+        <td><span class="mono">{{.Store}}</span></td>
+        <td class="num">{{if .Reads}}{{.HitPercent}}%{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="num">{{compact .Hits}}</td>
+        <td class="num">{{compact .Misses}}</td>
+        <td class="num hide-sm">{{compact .Writes}}</td>
+        <td class="num hide-sm">{{compact .Deletes}}</td>
+        <td class="num">{{if .Failures}}<strong class="error-text">{{compact .Failures}}</strong>{{else}}<span class="muted">0</span>{{end}}</td>
+        <td class="num hide-sm">{{.Keys}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+
+<section class="card table-wrap">
+  <div class="section-head table-title">
+    <h2>By key pattern</h2>
+    <nav class="seg" aria-label="Sort key patterns">
+      <a href="/cache?range={{.Range}}d" {{if eq .Sort "operations"}}aria-current="true"{{end}}>Busiest</a>
+      <a href="/cache?range={{.Range}}d&amp;sort=misses" {{if eq .Sort "misses"}}aria-current="true"{{end}}>Most misses</a>
+      <a href="/cache?range={{.Range}}d&amp;sort=failures" {{if eq .Sort "failures"}}aria-current="true"{{end}}>Failed writes</a>
+    </nav>
+  </div>
+  <table>
+    <thead><tr><th>Key pattern</th><th class="num">Hit rate</th><th class="num">Hits</th><th class="num">Misses</th><th class="num hide-sm">Writes</th><th class="num hide-sm">Deletes</th><th class="num hide-sm">Failed</th><th>Last used</th></tr></thead>
+    <tbody>
+    {{range .Stats}}
+      <tr>
+        <td class="issue-cell"><span class="issue-title mono">{{.Key}}</span>
+          <div class="muted small">{{.Store}}{{if eq .Key $.Data.OtherKey}} · new patterns past the daily limit{{end}}</div></td>
+        <td class="num">{{if .Reads}}{{if lt .HitPercent 50.0}}<strong class="warn-text">{{.HitPercent}}%</strong>{{else}}{{.HitPercent}}%{{end}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="num">{{compact .Hits}}</td>
+        <td class="num">{{compact .Misses}}</td>
+        <td class="num hide-sm">{{compact .Writes}}</td>
+        <td class="num hide-sm">{{compact .Deletes}}</td>
+        <td class="num hide-sm">{{if .Failures}}<strong class="error-text">{{compact .Failures}}</strong>{{else}}<span class="muted">0</span>{{end}}</td>
+        <td class="nowrap"><time datetime="{{isoTime .LastAt}}" title="{{datetime .LastAt}}" class="muted">{{timeago .LastAt}}</time></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+{{else}}
+<section class="card empty">
+  <span class="badge">Nothing yet</span>
+  <h2>See how well your cache works</h2>
+  <p class="muted">Update the Laravel package and cache hits, misses, writes and deletes are counted automatically, per store and key pattern. Only totals are sent, never values, and keys are reduced to patterns, so IDs and emails in keys never leave your app.</p>
+</section>
+{{end}}
+{{end}}
+{{end}}
