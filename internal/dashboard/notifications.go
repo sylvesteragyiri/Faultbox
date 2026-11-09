@@ -163,7 +163,7 @@ func (h *Handler) notificationsPage(w http.ResponseWriter, r *http.Request) {
 			enabled++
 		}
 	}
-	pg := h.newPage(r, "Notifications", "notifications", map[string]any{
+	pg := h.newPage(r, "Alerts", "notifications", map[string]any{
 		"Channels": channels,
 		"Names":    names,
 		"Projects": projects,

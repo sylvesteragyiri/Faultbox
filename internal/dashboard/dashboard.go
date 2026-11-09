@@ -109,6 +109,7 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /queue-failures", h.queueDashboard)
 	authed.HandleFunc("GET /queue-failures/jobs", h.failedJobList)
 	authed.HandleFunc("GET /queue-failures/{id}", h.failedJobShow)
+	authed.HandleFunc("GET /app-notifications", h.appNotifications)
 	authed.HandleFunc("GET /notifications", h.notificationsPage)
 	authed.HandleFunc("GET /notifications/channels/new", h.channelNew)
 	authed.HandleFunc("POST /notifications/channels", h.channelCreate)
@@ -144,7 +145,7 @@ func cacheStatic(next http.Handler) http.Handler {
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
 	"settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
-	"notifications", "notification_channel", "notification_secret",
+	"notifications", "notification_channel", "notification_secret", "app_notifications",
 }
 
 // assetURL returns a function mapping a static path to its URL with a

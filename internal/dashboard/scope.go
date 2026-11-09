@@ -76,12 +76,12 @@ func (h *Handler) scopeView(r *http.Request) scopeView {
 	if !found {
 		v.ProjectID = 0
 	}
-	facets, err := h.store.IssueFacets(r.Context(), v.ProjectID)
+	envs, err := h.store.KnownEnvironments(r.Context(), v.ProjectID)
 	if err != nil {
 		h.logger.Error("load environments for the scope switcher", "error", err)
 		return v
 	}
-	v.Envs = facets.Environments
+	v.Envs = envs
 	if v.Env != "" && !slices.Contains(v.Envs, v.Env) {
 		v.Envs = append(v.Envs, v.Env) // keep the current choice visible
 	}
@@ -103,7 +103,7 @@ func (h *Handler) setScope(w http.ResponseWriter, r *http.Request) {
 	}
 	// Switching project resets the environment unless it exists there too.
 	if s.Env != "" {
-		if facets, err := h.store.IssueFacets(r.Context(), s.ProjectID); err == nil && !slices.Contains(facets.Environments, s.Env) {
+		if envs, err := h.store.KnownEnvironments(r.Context(), s.ProjectID); err == nil && !slices.Contains(envs, s.Env) {
 			s.Env = ""
 		}
 	}

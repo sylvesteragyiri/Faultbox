@@ -23,11 +23,12 @@
           <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>{{template "icon" "overview"}}<span>Overview</span></a></li>
           <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}>{{template "icon" "issues"}}<span>Issues</span></a></li>
           <li><a href="/queue-failures" {{if eq .Nav "queue"}}aria-current="page"{{end}}>{{template "icon" "queue"}}<span>Queue Failures</span></a></li>
+          <li><a href="/app-notifications" {{if eq .Nav "app_notifications"}}aria-current="page"{{end}}>{{template "icon" "mail"}}<span>App notifications</span></a></li>
         </ul>
         <p class="nav-label">Configure</p>
         <ul>
           <li><a href="/projects" {{if eq .Nav "projects"}}aria-current="page"{{end}}>{{template "icon" "projects"}}<span>Projects</span></a></li>
-          <li><a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>{{template "icon" "notifications"}}<span>Notifications</span></a></li>
+          <li><a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>{{template "icon" "notifications"}}<span>Alerts</span></a></li>
           <li><a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>{{template "icon" "settings"}}<span>Settings</span></a></li>
         </ul>
       </nav>
