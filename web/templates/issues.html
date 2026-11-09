@@ -74,37 +74,20 @@
 
 {{define "issue_results"}}
 {{$f := .Data.Form}}
-<section id="issue-results" class="card table-wrap" aria-live="polite">
+<section id="issue-results" class="issue-results" aria-live="polite">
   {{if .Data.Rows}}
-  <table class="issues-table">
-    <thead>
-      <tr>
-        <th>Issue</th>
-        <th class="hide-sm">Project</th>
-        <th class="hide-sm">14 days</th>
-        <th class="num"><a href="{{$f.SortURL "count"}}" hx-get="{{$f.SortURL "count"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Events</a></th>
-        <th><a href="{{$f.SortURL "last_seen"}}" hx-get="{{$f.SortURL "last_seen"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Last seen</a></th>
-      </tr>
-    </thead>
-    <tbody>
-    {{range .Data.Rows}}
-      <tr>
-        <td class="issue-cell">
-          <a class="issue-title" href="/issues/{{.ID}}">{{if .JobName}}{{.JobName}}{{else}}{{.ExceptionType}}{{end}}</a>
-          {{template "issue_badges" .}}
-          <div class="issue-message">{{truncate .Message 160}}</div>
-          <div class="muted small mono truncate">{{if .JobName}}{{.ExceptionType}}{{else}}{{.Culprit}}{{end}}</div>
-        </td>
-        <td class="hide-sm muted">{{.ProjectName}}</td>
-        <td class="hide-sm">{{template "sparkline" .Spark}}</td>
-        <td class="num"><strong>{{compact .OccurrenceCount}}</strong></td>
-        <td class="muted nowrap"><time datetime="{{isoTime .LastSeenAt}}" title="{{datetime .LastSeenAt}}">{{timeago .LastSeenAt}}</time>
-          <div class="small">first {{timeago .FirstSeenAt}}</div></td>
-      </tr>
-    {{end}}
-    </tbody>
-  </table>
-  <nav class="pager" aria-label="Pages">
+  <div class="results-bar">
+    <span class="muted small">Showing <strong>{{.Data.First}}–{{.Data.Last}}</strong>{{if .Data.Page.HasNext}} and more{{end}}</span>
+    <nav class="seg" aria-label="Sort issues">
+      <a href="{{$f.SortURL "last_seen"}}" hx-get="{{$f.SortURL "last_seen"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" {{if eq $f.Sort "last_seen"}}aria-current="true"{{end}}>Last seen</a>
+      <a href="{{$f.SortURL "count"}}" hx-get="{{$f.SortURL "count"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" {{if eq $f.Sort "count"}}aria-current="true"{{end}}>Events</a>
+      <a href="{{$f.SortURL "first_seen"}}" hx-get="{{$f.SortURL "first_seen"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" {{if eq $f.Sort "first_seen"}}aria-current="true"{{end}}>Newest</a>
+    </nav>
+  </div>
+  <div class="issue-list">
+    {{range .Data.Rows}}{{template "issue_card" (dict "Row" . "CSRF" $.CSRF "Next" $f.ListURL)}}{{end}}
+  </div>
+  <nav class="pager card" aria-label="Pages">
     <span class="muted small">{{.Data.First}}–{{.Data.Last}}</span>
     <span class="row">
       {{if gt .Data.Page.Page 1}}<a class="btn" href="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Previous</a>{{end}}
@@ -112,7 +95,7 @@
     </span>
   </nav>
   {{else}}
-  <div class="empty">
+  <div class="card empty">
     {{if $f.Filtered}}
       <h2>No matching issues</h2>
       <p class="muted">Nothing matches these filters. <a href="/issues">Clear filters</a></p>
@@ -123,4 +106,54 @@
   </div>
   {{end}}
 </section>
+{{end}}
+
+{{define "issue_card"}}
+{{$r := .Row}}
+<article class="issue-card" id="issue-card-{{$r.ID}}">
+  <header class="issue-card-bar">
+    <div class="row tools">
+      {{if ne $r.Status "resolved"}}
+      <form method="post" action="/issues/{{$r.ID}}/status" hx-post="/issues/{{$r.ID}}/status" hx-target="#issue-card-{{$r.ID}}" hx-swap="outerHTML">
+        {{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$.Next}}"><input type="hidden" name="status" value="resolved">
+        <button class="tool" type="submit">{{template "icon" "check"}}<span>Resolve</span></button>
+      </form>
+      {{end}}
+      {{if eq $r.Status "unresolved"}}
+      <form method="post" action="/issues/{{$r.ID}}/status" hx-post="/issues/{{$r.ID}}/status" hx-target="#issue-card-{{$r.ID}}" hx-swap="outerHTML">
+        {{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$.Next}}"><input type="hidden" name="status" value="ignored">
+        <button class="tool" type="submit">{{template "icon" "mute"}}<span>Ignore</span></button>
+      </form>
+      {{else}}
+      <form method="post" action="/issues/{{$r.ID}}/status" hx-post="/issues/{{$r.ID}}/status" hx-target="#issue-card-{{$r.ID}}" hx-swap="outerHTML">
+        {{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$.Next}}"><input type="hidden" name="status" value="unresolved">
+        <button class="tool" type="submit">{{template "icon" "undo"}}<span>Reopen</span></button>
+      </form>
+      {{end}}
+    </div>
+    <div class="row tools">
+      {{if eq $r.Status "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq $r.Status "ignored"}}<span class="badge">Ignored</span>{{end}}
+      {{if eq $r.Category "queue_failure"}}<span class="badge badge-queue">Job</span>{{end}}
+      <a class="tool" href="/issues/{{$r.ID}}"><span>Open</span>{{template "icon" "arrow"}}</a>
+    </div>
+  </header>
+  <div class="issue-card-body">
+    <div class="issue-card-main">
+      <a class="issue-title" href="/issues/{{$r.ID}}">{{if $r.JobName}}{{$r.JobName}}{{else}}{{$r.ExceptionType}}{{end}}</a>
+      <p class="issue-message">{{truncate $r.Message 200}}</p>
+      <p class="muted small mono truncate issue-culprit">{{if $r.JobName}}{{$r.ExceptionType}}{{else}}{{$r.Culprit}}{{end}}</p>
+    </div>
+    <div class="issue-card-side">
+      <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="Events per day, last 14 days">{{range $r.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="1"{{if .Peak}} class="peak"{{end}}></rect>{{end}}</svg>
+      <dl class="issue-stats">
+        <div><dt>Events</dt><dd><strong>{{compact $r.OccurrenceCount}}</strong></dd></div>
+        <div><dt>Project</dt><dd class="truncate">{{$r.ProjectName}}</dd></div>
+        <div><dt>Last seen</dt><dd><time datetime="{{isoTime $r.LastSeenAt}}" title="{{datetime $r.LastSeenAt}}">{{timeago $r.LastSeenAt}}</time></dd></div>
+        <div><dt>Type</dt><dd>{{if eq $r.Category "queue_failure"}}Job{{else if eq $r.Category "message"}}Message{{else}}Exception{{end}}</dd></div>
+        <div><dt>First seen</dt><dd><time datetime="{{isoTime $r.FirstSeenAt}}" title="{{datetime $r.FirstSeenAt}}">{{timeago $r.FirstSeenAt}}</time></dd></div>
+        <div><dt>Release</dt><dd class="mono truncate">{{if $r.LastRelease}}{{$r.LastRelease}}{{else}}<span class="muted">—</span>{{end}}</dd></div>
+      </dl>
+    </div>
+  </div>
+</article>
 {{end}}

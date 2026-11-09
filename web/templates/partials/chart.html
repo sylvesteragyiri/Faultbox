@@ -44,3 +44,32 @@
 {{if eq .Status "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq .Status "ignored"}}<span class="badge">Ignored</span>{{end}}
 {{if eq .Category "queue_failure"}}<span class="badge badge-queue">Queue</span>{{end}}
 {{end}}
+
+{{define "heatmap"}}
+{{if .Empty}}
+<p class="muted small">No events in the last {{.WeekCount}} weeks.</p>
+{{else}}
+<figure class="chart heatmap" data-chart>
+  <div class="chart-plot">
+    <svg class="chart-svg heat-svg" viewBox="0 0 {{.Width}} {{.Height}}" role="img" aria-label="{{.Label}}">
+      {{range .ColLabels}}<text class="xlabel" x="{{.X}}" y="11">{{.Label}}</text>{{end}}
+      {{range .RowLabels}}<text class="tick" x="0" y="{{.X}}" dy="0.32em">{{.Label}}</text>{{end}}
+      {{range .Cells}}{{if .Future}}<rect class="heat-future" x="{{.X}}" y="{{.Y}}" width="{{$.CellSize}}" height="{{$.CellSize}}" rx="4"></rect>{{else}}<g class="cell" tabindex="0" data-tip="{{.Tip}}" aria-label="{{.Tip}}"><title>{{.Tip}}</title><rect class="heat heat-{{.Level}}" x="{{.X}}" y="{{.Y}}" width="{{$.CellSize}}" height="{{$.CellSize}}" rx="4"></rect></g>{{end}}{{end}}
+    </svg>
+    <div class="chart-tip" role="status" hidden></div>
+  </div>
+  <div class="heat-legend" aria-hidden="true">
+    <span class="muted small">Less</span>
+    <i class="heat-0"></i><i class="heat-1"></i><i class="heat-2"></i><i class="heat-3"></i><i class="heat-4"></i><i class="heat-5"></i>
+    <span class="muted small">More</span>
+  </div>
+  <details class="chart-table">
+    <summary>Show as table</summary>
+    <table>
+      <thead><tr><th>Week of</th><th class="num">Mon</th><th class="num">Tue</th><th class="num">Wed</th><th class="num">Thu</th><th class="num">Fri</th><th class="num">Sat</th><th class="num">Sun</th></tr></thead>
+      <tbody>{{range .Weeks}}<tr><td>{{.Start}}</td>{{range .Counts}}<td class="num">{{.}}</td>{{end}}</tr>{{end}}</tbody>
+    </table>
+  </details>
+</figure>
+{{end}}
+{{end}}

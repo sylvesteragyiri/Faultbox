@@ -1,5 +1,10 @@
 {{define "content"}}
-<header class="page-head"><div><h1>Overview</h1><p class="page-sub">Errors and failed jobs across every project.</p></div></header>
+<header class="page-head">
+  <div>
+    <h1>Overview</h1>
+    <p class="page-sub">Errors and failed jobs across every project.</p>
+  </div>
+</header>
 {{with .Data}}
 <section class="stats" aria-label="Summary">
   <a class="stat card stat-link" href="/issues"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Unresolved issues</span><span class="stat-value">{{compact .Stats.Unresolved}}</span><span class="stat-note">{{compact .Stats.Total}} issues in total</span></a>
@@ -19,10 +24,70 @@
 </section>
 {{end}}
 
-<section class="card">
-  <h2>Events per day</h2>
-  {{template "bar_chart" .Chart}}
+{{if .Cards}}
+<section aria-labelledby="projects-heading" class="stack-sm">
+  <div class="section-head">
+    <h2 id="projects-heading">Projects</h2>
+    <a class="small" href="/projects">Manage projects</a>
+  </div>
+  <div class="project-grid">
+    {{range .Cards}}
+    <article class="project-card card">
+      <header class="project-card-head">
+        <span class="project-mark" aria-hidden="true">{{template "icon" "folder"}}</span>
+        <div class="project-card-title">
+          <a class="issue-title" href="/issues?project={{.Project.ID}}">{{.Project.Name}}</a>
+          <div class="env-row">
+            {{range .Project.Environments}}<span class="env-pill">{{.}}</span>{{else}}<span class="env-pill env-any">any environment</span>{{end}}
+            {{if not .Project.Active}}<span class="badge badge-off">Disabled</span>{{end}}
+          </div>
+        </div>
+      </header>
+      <div class="project-card-metrics">
+        <div class="metric">
+          <span class="metric-label">Events · 7 days</span>
+          <span class="metric-value">{{compact .Activity.Events}}
+            {{$c := .Activity.Change}}{{if gt $c 0}}<span class="delta delta-up" title="{{.Activity.Previous}} the 7 days before">{{signed $c}}</span>{{else if lt $c 0}}<span class="delta delta-down" title="{{.Activity.Previous}} the 7 days before">{{signed $c}}</span>{{end}}
+          </span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Unresolved</span>
+          <span class="metric-value">{{compact .Activity.Unresolved}}</span>
+        </div>
+      </div>
+      <div class="project-spark">
+        {{if .Activity.Events}}<svg class="spark-line" viewBox="0 0 100 20" preserveAspectRatio="none" role="img" aria-label="Events per day, last 7 days"><polyline points="{{.Spark}}"></polyline></svg>
+        {{else}}<p class="muted small">No events in the last 7 days.</p>{{end}}
+        <div class="spark-axis muted"><span>7d ago</span><span>now</span></div>
+      </div>
+      <footer class="project-card-foot">
+        <a href="/issues?project={{.Project.ID}}">{{template "icon" "issues"}}<span>Issues</span></a>
+        <a href="/queue-failures?project={{.Project.ID}}">{{template "icon" "queue"}}<span>Failed jobs</span></a>
+        <a href="/projects/{{.Project.ID}}" class="push-right" aria-label="Settings for {{.Project.Name}}" title="Settings">{{template "icon" "settings"}}</a>
+      </footer>
+    </article>
+    {{end}}
+  </div>
 </section>
+{{end}}
+
+<div class="grid-2 grid-wide-left">
+  <section class="card">
+    <div class="section-head">
+      <h2>Events per day</h2>
+      <nav class="seg" aria-label="Chart range">
+        <a href="/?range=7d" {{if eq .Range 7}}aria-current="true"{{end}}>7 days</a>
+        <a href="/?range=14d" {{if eq .Range 14}}aria-current="true"{{end}}>14 days</a>
+        <a href="/" {{if eq .Range 30}}aria-current="true"{{end}}>30 days</a>
+      </nav>
+    </div>
+    {{template "bar_chart" .Chart}}
+  </section>
+  <section class="card">
+    <div class="section-head"><h2>Activity</h2><span class="muted small">last {{.Heatmap.WeekCount}} weeks</span></div>
+    {{template "heatmap" .Heatmap}}
+  </section>
+</div>
 
 <div class="grid-2">
   <section class="card">

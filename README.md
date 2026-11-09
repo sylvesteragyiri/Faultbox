@@ -145,6 +145,17 @@ This sends a test exception. If it fails, it says why: the server can't be reach
 
 To get alerts, add a channel under **Notifications**.
 
+### Will it slow down or break my app?
+
+No, by design:
+- **Only on errors:** the SDK makes no network calls unless it reports an exception or failed job, so healthy requests pay nothing.
+- **After the response:** in web requests, events are sent after the response has been sent.
+- **Errors swallowed:** every hook is wrapped in a `try/catch`.
+- **Bounded outages:** strict timeouts, a 3 s budget per request or job, and a circuit breaker mean a Faultbox outage costs your app at most one short timeout per minute per worker.
+- **Kill switch:** `FAULTBOX_ENABLED=false` turns it off completely.
+
+The package README's [Safety section](https://github.com/sylvesteragyiri/faultbox-laravel#safety-it-never-slows-down-or-breaks-your-app) has the details, worst-case numbers and the tests behind them.
+
 ### Laravel Octane
 
 Octane is supported. Under Octane one worker serves many requests, so the SDK listens to Octane's `RequestReceived` and `RequestTerminated` events:

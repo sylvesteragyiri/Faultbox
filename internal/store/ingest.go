@@ -292,6 +292,18 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 		res.IssueID, day); err != nil {
 		return res, err
 	}
+	errs, queue := 1, 0
+	if e.Category == CategoryQueue {
+		errs, queue = 0, 1
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO daily_totals (day, project_id, errors, queue_failures) VALUES (?, ?, ?, ?)
+		 ON CONFLICT (day, project_id) DO UPDATE SET
+		   errors = errors + excluded.errors,
+		   queue_failures = queue_failures + excluded.queue_failures`,
+		day, e.ProjectID, errs, queue); err != nil {
+		return res, err
+	}
 	return res, nil
 }
 

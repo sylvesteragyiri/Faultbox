@@ -124,6 +124,9 @@ func (f issueForm) url() string {
 	return "/issues"
 }
 
+// ListURL is the current list, filters and page included.
+func (f issueForm) ListURL() string { return f.url() }
+
 // PageURL links to another page of the same results.
 func (f issueForm) PageURL(page int) string { f.Page = page; return f.url() }
 
@@ -140,6 +143,7 @@ type issueRow struct {
 	store.IssueSummary
 	ProjectName string
 	Spark       string
+	Bars        []SparkBar
 }
 
 func (h *Handler) projectNames(r *http.Request) (map[int64]string, []store.Project, error) {
@@ -157,7 +161,7 @@ func (h *Handler) projectNames(r *http.Request) (map[int64]string, []store.Proje
 func (h *Handler) issueRows(names map[int64]string, issues []store.IssueSummary) []issueRow {
 	rows := make([]issueRow, len(issues))
 	for i, is := range issues {
-		rows[i] = issueRow{IssueSummary: is, ProjectName: names[is.ProjectID], Spark: sparkline(is.Trend)}
+		rows[i] = issueRow{IssueSummary: is, ProjectName: names[is.ProjectID], Spark: sparkline(is.Trend), Bars: sparkBars(is.Trend)}
 	}
 	return rows
 }
@@ -434,8 +438,13 @@ func (h *Handler) issueSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logger.Info("issue status changed", "issue_id", is.ID, "status", status, "user_id", h.userID(r))
+	// A card in the issue list re-renders itself.
+	if target := r.Header.Get("HX-Target"); isHTMX(r) && strings.HasPrefix(target, "issue-card-") {
+		h.renderIssueCard(w, r, is.ID)
+		return
+	}
 	if !isHTMX(r) {
-		// statusReturnPath only returns /queue-failures/<id> or this issue's path.
+		// statusReturnPath only returns local issue or failed-job paths.
 		http.Redirect(w, r, statusReturnPath(r.PostFormValue("next"), is.ID), http.StatusSeeOther) //nolint:gosec // G710: local paths only, see statusReturnPath
 		return
 	}
@@ -448,13 +457,50 @@ func (h *Handler) issueSetStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // statusReturnPath is where a plain (non-HTMX) status form returns to: the
-// failed-job page it was sent from, or the issue. Only local queue paths
-// are accepted, so the field can't redirect off-site.
+// failed-job page or issue list it was sent from, or the issue. Only these
+// local paths are accepted, so the field can't redirect off-site.
 func statusReturnPath(next string, issueID int64) string {
 	if rest, ok := strings.CutPrefix(next, "/queue-failures/"); ok && rest != "" {
 		if _, err := strconv.ParseInt(rest, 10, 64); err == nil {
 			return next
 		}
 	}
+	if u, err := url.Parse(next); err == nil && u.Scheme == "" && u.Host == "" && u.User == nil && u.Path == "/issues" {
+		return (&url.URL{Path: "/issues", RawQuery: u.Query().Encode()}).String()
+	}
 	return "/issues/" + strconv.FormatInt(issueID, 10)
+}
+
+// renderIssueCard renders one issue-list card, after a status change.
+func (h *Handler) renderIssueCard(w http.ResponseWriter, r *http.Request, id int64) {
+	ctx := r.Context()
+	is, err := h.store.Issue(ctx, id)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	trend, err := h.store.IssueTrend(ctx, id, store.TrendDays)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	project, err := h.store.Project(ctx, is.ProjectID)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	counts := make([]int64, len(trend))
+	for i, d := range trend {
+		counts[i] = d.Errors
+	}
+	sum := store.IssueSummary{
+		ID: is.ID, ProjectID: is.ProjectID, Fingerprint: is.Fingerprint, Category: is.Category, Level: is.Level,
+		ExceptionType: is.ExceptionType, Message: is.Message, Culprit: is.Culprit, JobName: is.JobName,
+		Status: is.Status, OccurrenceCount: is.OccurrenceCount, FirstSeenAt: is.FirstSeenAt, LastSeenAt: is.LastSeenAt,
+		LastRelease: is.LastRelease, Trend: counts,
+	}
+	row := issueRow{IssueSummary: sum, ProjectName: project.Name, Spark: sparkline(counts), Bars: sparkBars(counts)}
+	h.renderPartial(w, "issues", "issue_card", map[string]any{
+		"Row": row, "CSRF": csrfFrom(ctx), "Next": r.PostFormValue("next"),
+	})
 }

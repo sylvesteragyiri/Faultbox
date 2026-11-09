@@ -204,6 +204,16 @@ func (h *Handler) parseTemplates() error {
 		},
 		"hasString": slices.Contains[[]string],
 		"lower":     strings.ToLower,
+		"today":     func() string { return time.Now().Format("Monday, 2 January 2006") },
+		"signed": func(n int64) string {
+			if n > 0 {
+				return "+" + compact(n)
+			}
+			if n < 0 {
+				return "−" + compact(-n)
+			}
+			return "±0"
+		},
 		"triggerLabel": func(t string) string {
 			switch t {
 			case store.TriggerNewIssue:
@@ -299,6 +309,24 @@ func (h *Handler) render(w http.ResponseWriter, status int, name, block string, 
 	_, _ = buf.WriteTo(w)
 }
 
+// renderPartial executes one template block with arbitrary data, for HTMX
+// fragments that aren't driven by a full page.
+func (h *Handler) renderPartial(w http.ResponseWriter, name, block string, data any) {
+	t, ok := h.pages[name]
+	if !ok {
+		h.serverError(w, fmt.Errorf("unknown template %q", name))
+		return
+	}
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, block, data); err != nil {
+		h.serverError(w, fmt.Errorf("render %s/%s: %w", name, block, err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = buf.WriteTo(w)
+}
+
 func (h *Handler) serverError(w http.ResponseWriter, err error) {
 	h.logger.Error("dashboard error", "error", err)
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -330,7 +358,21 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	trend, err := h.store.Trend(ctx, 30, 0)
+	// One rollup read covers the heatmap's eight weeks and every chart range.
+	days := 30
+	switch r.URL.Query().Get("range") {
+	case "7d":
+		days = 7
+	case "14d":
+		days = 14
+	}
+	history, err := h.store.Trend(ctx, heatmapWeeks*7, 0)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	trend := history[len(history)-days:]
+	activity, err := h.store.ProjectsActivity(ctx, 7)
 	if err != nil {
 		h.serverError(w, err)
 		return
@@ -345,19 +387,40 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	names, _, err := h.projectNames(r)
+	names, projects, err := h.projectNames(r)
 	if err != nil {
 		h.serverError(w, err)
 		return
+	}
+	cards := make([]projectCard, 0, len(projects))
+	for _, p := range projects {
+		a := activity[p.ID]
+		if a == nil {
+			a = &store.ProjectActivity{ProjectID: p.ID, Days: make([]int64, 7)}
+		}
+		cards = append(cards, projectCard{Project: p, Activity: *a, Spark: sparkline(a.Days)})
 	}
 	h.render(w, http.StatusOK, "overview", "", h.newPage(r, "Overview", "overview", map[string]any{
 		"ActiveProjects":   active,
 		"DisabledProjects": disabled,
 		"Stats":            stats,
-		"Chart":            newBarChart("Events per day, last 30 days", trend, []string{"Errors", "Failed jobs"}),
+		"Range":            days,
+		"Chart":            newBarChart(fmt.Sprintf("Events per day, last %d days", days), trend, []string{"Errors", "Failed jobs"}),
+		"Heatmap":          newHeatmap(history, heatmapWeeks),
+		"Cards":            cards,
 		"Recent":           h.issueRows(names, recent.Issues),
 		"Failures":         failures,
 	}))
+}
+
+// heatmapWeeks is how many weeks the overview's activity heatmap shows.
+const heatmapWeeks = 12
+
+// projectCard is one project on the overview.
+type projectCard struct {
+	Project  store.Project
+	Activity store.ProjectActivity
+	Spark    string
 }
 
 func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {

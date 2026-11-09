@@ -26,7 +26,7 @@
     var plot = fig.querySelector(".chart-plot");
     var hit = bar.querySelector(".hit") || bar;
     var b = hit.getBoundingClientRect(), p = plot.getBoundingClientRect();
-    fig.querySelectorAll(".bar.active").forEach(function (el) { el.classList.remove("active"); });
+    fig.querySelectorAll(".active").forEach(function (el) { el.classList.remove("active"); });
     bar.classList.add("active");
     tip.textContent = bar.getAttribute("data-tip");
     tip.hidden = false;
@@ -38,10 +38,10 @@
   function hideTip(fig) {
     var tip = fig && fig.querySelector(".chart-tip");
     if (tip) tip.hidden = true;
-    if (fig) fig.querySelectorAll(".bar.active").forEach(function (el) { el.classList.remove("active"); });
+    if (fig) fig.querySelectorAll(".active").forEach(function (el) { el.classList.remove("active"); });
   }
   document.addEventListener("pointerover", function (e) {
-    var bar = e.target.closest && e.target.closest("[data-chart] .bar");
+    var bar = e.target.closest && e.target.closest("[data-chart] .bar, [data-chart] .cell");
     if (bar) showTip(bar);
   });
   document.addEventListener("pointerout", function (e) {
@@ -49,7 +49,7 @@
     if (fig && !fig.contains(e.relatedTarget)) hideTip(fig);
   });
   document.addEventListener("focusin", function (e) {
-    var bar = e.target.closest && e.target.closest("[data-chart] .bar");
+    var bar = e.target.closest && e.target.closest("[data-chart] .bar, [data-chart] .cell");
     if (bar) showTip(bar);
   });
   document.addEventListener("focusout", function (e) {

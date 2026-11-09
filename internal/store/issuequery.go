@@ -369,17 +369,15 @@ type DayCount struct {
 func (s *Store) Trend(ctx context.Context, days int, projectID int64) ([]DayCount, error) {
 	today := s.now().UTC().UnixMilli() / dayMs
 	first := today - int64(days) + 1
-	query := `SELECT d.day,
-	                 SUM(CASE WHEN i.category = 'queue_failure' THEN 0 ELSE d.count END),
-	                 SUM(CASE WHEN i.category = 'queue_failure' THEN d.count ELSE 0 END)
-	            FROM issue_daily_counts d JOIN issues i ON i.id = d.issue_id
-	           WHERE d.day >= ?`
+	// daily_totals is maintained at ingest, so this reads days x projects
+	// rows instead of every issue's daily counts.
+	query := `SELECT day, SUM(errors), SUM(queue_failures) FROM daily_totals WHERE day >= ?`
 	args := []any{first}
 	if projectID > 0 {
-		query += ` AND i.project_id = ?`
+		query += ` AND project_id = ?`
 		args = append(args, projectID)
 	}
-	query += ` GROUP BY d.day`
+	query += ` GROUP BY day`
 	rows, err := s.reader.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

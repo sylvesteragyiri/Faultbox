@@ -44,6 +44,10 @@
     </aside>
     <div class="workspace">
       <header class="topbar">
+        <div class="topbar-date">
+          <span class="muted small">{{today}}</span>
+          <strong>{{.Title}}</strong>
+        </div>
         <form class="topbar-search" method="get" action="/issues" role="search">
           {{template "icon" "search"}}
           <label class="sr-only" for="global-search">Search</label>
