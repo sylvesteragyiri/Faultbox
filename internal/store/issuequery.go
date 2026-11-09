@@ -411,13 +411,19 @@ type RecentFailure struct {
 	FailedAt time.Time
 }
 
-// RecentQueueFailures lists the latest failed jobs across projects.
-func (s *Store) RecentQueueFailures(ctx context.Context, limit int) ([]RecentFailure, error) {
-	rows, err := s.reader.QueryContext(ctx,
-		`SELECT q.event_id, q.issue_id, q.job_name, COALESCE(q.queue_name, ''), q.kind, i.message, q.failed_at
-		   FROM queue_failures q JOIN issues i ON i.id = q.issue_id
-		  WHERE q.kind != 'attempt'
-		  ORDER BY q.failed_at DESC LIMIT ?`, limit)
+// RecentQueueFailures lists the latest failed jobs, for every project or one
+// (projectID > 0).
+func (s *Store) RecentQueueFailures(ctx context.Context, projectID int64, limit int) ([]RecentFailure, error) {
+	query := `SELECT q.event_id, q.issue_id, q.job_name, COALESCE(q.queue_name, ''), q.kind, i.message, q.failed_at
+	            FROM queue_failures q JOIN issues i ON i.id = q.issue_id
+	           WHERE q.kind != 'attempt'`
+	args := []any{}
+	if projectID > 0 {
+		query += ` AND q.project_id = ?`
+		args = append(args, projectID)
+	}
+	args = append(args, limit)
+	rows, err := s.reader.QueryContext(ctx, query+` ORDER BY q.failed_at DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}

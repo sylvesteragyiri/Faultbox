@@ -27,6 +27,8 @@ type issueForm struct {
 	Range    string
 	Sort     string
 	Page     int
+
+	scope Scope // the switcher's choice: the default project and environment
 }
 
 var rangeDurations = map[string]time.Duration{
@@ -48,6 +50,15 @@ func parseIssueForm(r *http.Request) issueForm {
 		Q:        strings.TrimSpace(q.Get("q")),
 		Range:    q.Get("range"),
 		Sort:     q.Get("sort"),
+	}
+	// Without explicit project or env parameters, the switcher's scope
+	// applies; "project=" (All projects) overrides it for this list.
+	f.scope = scopeFrom(r)
+	if !q.Has("project") {
+		f.Project = f.scope.Project()
+	}
+	if !q.Has("env") {
+		f.Env = f.scope.Env
 	}
 	if !q.Has("status") {
 		f.Status = store.IssueUnresolved
@@ -100,12 +111,18 @@ func (f issueForm) values() url.Values {
 			v.Set(k, val)
 		}
 	}
-	set("project", f.Project, "")
+	// Project and environment are written only when they differ from the
+	// scope, and then even when empty, so "All projects" sticks.
+	if f.Project != f.scope.Project() {
+		v.Set("project", f.Project)
+	}
+	if f.Env != f.scope.Env {
+		v.Set("env", f.Env)
+	}
 	if f.Status != store.IssueUnresolved {
 		v.Set("status", f.Status)
 	}
 	set("category", f.Category, store.CategoryErrors)
-	set("env", f.Env, "")
 	set("release", f.Release, "")
 	set("type", f.Type, "")
 	set("q", f.Q, "")
@@ -124,6 +141,12 @@ func (f issueForm) url() string {
 	return "/issues"
 }
 
+// ProjectSet reports whether the list's project differs from the scope.
+func (f issueForm) ProjectSet() bool { return f.Project != f.scope.Project() }
+
+// EnvSet reports whether the list's environment differs from the scope.
+func (f issueForm) EnvSet() bool { return f.Env != f.scope.Env }
+
 // ListURL is the current list, filters and page included.
 func (f issueForm) ListURL() string { return f.url() }
 
@@ -135,7 +158,7 @@ func (f issueForm) SortURL(sort string) string { f.Sort, f.Page = sort, 1; retur
 
 // Filtered reports whether anything beyond the defaults is applied.
 func (f issueForm) Filtered() bool {
-	return f.Project != "" || f.Env != "" || f.Release != "" || f.Type != "" || f.Q != "" || f.Range != "" ||
+	return f.ProjectSet() || f.EnvSet() || f.Release != "" || f.Type != "" || f.Q != "" || f.Range != "" ||
 		f.Status != store.IssueUnresolved || f.Category != store.CategoryErrors
 }
 

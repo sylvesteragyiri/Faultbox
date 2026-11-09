@@ -20,6 +20,9 @@ const queueDays = 30
 func (h *Handler) queueDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	projectID, _ := strconv.ParseInt(r.URL.Query().Get("project"), 10, 64)
+	if !r.URL.Query().Has("project") {
+		projectID = scopeFrom(r).ProjectID
+	}
 
 	names, projects, err := h.projectNames(r)
 	if err != nil {
@@ -132,6 +135,8 @@ type queueForm struct {
 	Kind       string
 	Range      string
 	Page       int
+
+	scope Scope // the switcher's choice: the default project and environment
 }
 
 func parseQueueForm(r *http.Request) queueForm {
@@ -144,6 +149,13 @@ func parseQueueForm(r *http.Request) queueForm {
 		Env:        strings.TrimSpace(q.Get("env")),
 		Kind:       q.Get("kind"),
 		Range:      q.Get("range"),
+	}
+	f.scope = scopeFrom(r)
+	if !q.Has("project") {
+		f.Project = f.scope.Project()
+	}
+	if !q.Has("env") {
+		f.Env = f.scope.Env
 	}
 	if _, err := strconv.ParseInt(f.Project, 10, 64); err != nil {
 		f.Project = ""
@@ -181,11 +193,15 @@ func (f queueForm) values() url.Values {
 			v.Set(k, val)
 		}
 	}
-	set("project", f.Project, "")
+	if f.Project != f.scope.Project() {
+		v.Set("project", f.Project)
+	}
+	if f.Env != f.scope.Env {
+		v.Set("env", f.Env)
+	}
 	set("queue", f.Queue, "")
 	set("connection", f.Connection, "")
 	set("job", f.Job, "")
-	set("env", f.Env, "")
 	set("kind", f.Kind, store.QueueKindFailures)
 	set("range", f.Range, "")
 	if f.Page > 1 {
@@ -207,9 +223,15 @@ func (f queueForm) PageURL(page int) string { f.Page = page; return f.url() }
 // JobURL filters the same results to one job class.
 func (f queueForm) JobURL(job string) string { f.Job, f.Page = job, 1; return f.url() }
 
+// ProjectSet reports whether the list's project differs from the scope.
+func (f queueForm) ProjectSet() bool { return f.Project != f.scope.Project() }
+
+// EnvSet reports whether the list's environment differs from the scope.
+func (f queueForm) EnvSet() bool { return f.Env != f.scope.Env }
+
 // Filtered reports whether anything beyond the defaults is applied.
 func (f queueForm) Filtered() bool {
-	return f.Project != "" || f.Queue != "" || f.Connection != "" || f.Job != "" || f.Env != "" ||
+	return f.ProjectSet() || f.Queue != "" || f.Connection != "" || f.Job != "" || f.EnvSet() ||
 		f.Range != "" || f.Kind != store.QueueKindFailures
 }
 

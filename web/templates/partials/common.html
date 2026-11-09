@@ -15,3 +15,31 @@
 {{end}}
 
 {{define "job_kind"}}{{if eq . "attempt"}}<span class="badge badge-warn" title="A retry failed; the job will run again">Retry</span>{{else if eq . "manual"}}<span class="badge badge-off" title="The job called $this->fail()">Manual</span>{{else}}<span class="badge badge-off" title="Out of retries; the job won't run again">Terminal</span>{{end}}{{end}}
+
+{{define "theme_switch"}}<div class="theme-switch" role="group" aria-label="Color theme">
+  <button type="button" data-theme-set="system" aria-pressed="true" title="Match system">{{template "icon" "monitor"}}<span class="sr-only">System</span></button>
+  <button type="button" data-theme-set="light" aria-pressed="false" title="Light">{{template "icon" "sun"}}<span class="sr-only">Light</span></button>
+  <button type="button" data-theme-set="dark" aria-pressed="false" title="Dark">{{template "icon" "moon"}}<span class="sr-only">Dark</span></button>
+</div>{{end}}
+
+{{define "scope_switcher"}}{{$s := .Scope}}
+<form class="scope-switcher" method="post" action="/scope" hx-post="/scope" hx-trigger="change" hx-swap="none" aria-label="Project and environment">
+  {{template "csrf" .CSRF}}<input type="hidden" name="next" value="{{$s.Next}}">
+  <label class="scope-project">
+    <span class="scope-mark" aria-hidden="true">{{template "icon" "folder"}}</span>
+    <span class="sr-only">Project</span>
+    <select name="project">
+      <option value="">All projects</option>
+      {{range $s.Projects}}<option value="{{.ID}}" {{if eq $s.ProjectID .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label class="scope-env{{if $s.Env}} is-set{{end}}">
+    <span class="sr-only">Environment</span>
+    <select name="env">
+      <option value="">All environments</option>
+      {{range $s.Envs}}<option {{if eq $s.Env .}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <noscript><button class="btn btn-sm" type="submit">Switch</button></noscript>
+</form>
+{{end}}

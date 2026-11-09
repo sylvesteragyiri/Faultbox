@@ -246,7 +246,7 @@ func TestOverviewAndDetailQueries(t *testing.T) {
 		t.Fatalf("last trend day = %v, want today", trend[29].Day)
 	}
 
-	failures, _ := st.RecentQueueFailures(ctx, 5)
+	failures, _ := st.RecentQueueFailures(ctx, 0, 5)
 	if len(failures) != 3 || failures[0].JobName != "App\\Jobs\\SyncInvoiceToXero" {
 		t.Fatalf("recent failures = %+v", failures)
 	}

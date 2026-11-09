@@ -2,70 +2,73 @@
 {{$f := .Data.Form}}
 <header class="page-head"><div><h1>Issues</h1><p class="page-sub">Exceptions grouped by type, message and stack trace.</p></div></header>
 
-<form class="card filters" method="get" action="/issues"
+<form class="filter-bar" method="get" action="/issues" role="search"
       hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true"
       hx-trigger="change, input changed delay:300ms from:find input[name=q], submit">
-  <label class="filter-search">Search
-    <input type="search" name="q" value="{{$f.Q}}" placeholder="Exception, message, URL, release or fingerprint" autocomplete="off">
-  </label>
-  <label>Status
-    <select name="status">
-      <option value="unresolved" {{if eq $f.Status "unresolved"}}selected{{end}}>Unresolved</option>
-      <option value="resolved" {{if eq $f.Status "resolved"}}selected{{end}}>Resolved</option>
-      <option value="ignored" {{if eq $f.Status "ignored"}}selected{{end}}>Ignored</option>
-      <option value="all" {{if eq $f.Status "all"}}selected{{end}}>All</option>
-    </select>
-  </label>
-  <label>Kind
-    <select name="category">
-      <option value="errors" {{if eq $f.Category "errors"}}selected{{end}}>Errors</option>
-      <option value="queue_failure" {{if eq $f.Category "queue_failure"}}selected{{end}}>Failed jobs</option>
-      <option value="all" {{if eq $f.Category "all"}}selected{{end}}>All</option>
-    </select>
-  </label>
-  <label>Project
-    <select name="project">
-      <option value="">All projects</option>
-      {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
-  <label>Environment
-    <select name="env">
-      <option value="">Any</option>
-      {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
-  <label>Release
-    <select name="release">
-      <option value="">Any</option>
-      {{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
-  <label>Exception
-    <select name="type">
-      <option value="">Any</option>
-      {{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{truncate . 60}}</option>{{end}}
-    </select>
-  </label>
-  <label>Seen
-    <select name="range">
-      <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
-      <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
-      <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
-      <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
-      <option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>Last 90 days</option>
-    </select>
-  </label>
-  <label>Sort
-    <select name="sort">
-      <option value="last_seen" {{if eq $f.Sort "last_seen"}}selected{{end}}>Last seen</option>
-      <option value="count" {{if eq $f.Sort "count"}}selected{{end}}>Most events</option>
-      <option value="first_seen" {{if eq $f.Sort "first_seen"}}selected{{end}}>Newest</option>
-    </select>
-  </label>
-  <div class="filter-actions">
-    <button class="btn" type="submit">Apply</button>
-    {{if $f.Filtered}}<a class="btn btn-link" href="/issues">Clear filters</a>{{end}}
+  <div class="filter-row">
+    <label class="search-field">
+      {{template "icon" "search"}}
+      <span class="sr-only">Search issues</span>
+      <input type="search" name="q" value="{{$f.Q}}" placeholder="Search issues" autocomplete="off">
+    </label>
+    <fieldset class="seg seg-radio">
+      <legend class="sr-only">Sort by</legend>
+      <label><input type="radio" name="sort" value="last_seen" {{if eq $f.Sort "last_seen"}}checked{{end}}><span>Recent</span></label>
+      <label><input type="radio" name="sort" value="count" {{if eq $f.Sort "count"}}checked{{end}}><span>Frequent</span></label>
+      <label><input type="radio" name="sort" value="first_seen" {{if eq $f.Sort "first_seen"}}checked{{end}}><span>New</span></label>
+    </fieldset>
+  </div>
+  <div class="pill-row">
+    <label class="pill{{if ne $f.Status "unresolved"}} is-set{{end}}"><span class="sr-only">Status</span>
+      <select name="status">
+        <option value="unresolved" {{if eq $f.Status "unresolved"}}selected{{end}}>Unresolved</option>
+        <option value="resolved" {{if eq $f.Status "resolved"}}selected{{end}}>Resolved</option>
+        <option value="ignored" {{if eq $f.Status "ignored"}}selected{{end}}>Ignored</option>
+        <option value="all" {{if eq $f.Status "all"}}selected{{end}}>All statuses</option>
+      </select>
+    </label>
+    <label class="pill{{if ne $f.Category "errors"}} is-set{{end}}"><span class="sr-only">Kind</span>
+      <select name="category">
+        <option value="errors" {{if eq $f.Category "errors"}}selected{{end}}>Errors</option>
+        <option value="queue_failure" {{if eq $f.Category "queue_failure"}}selected{{end}}>Failed jobs</option>
+        <option value="all" {{if eq $f.Category "all"}}selected{{end}}>All kinds</option>
+      </select>
+    </label>
+    <label class="pill{{if $f.ProjectSet}} is-set{{end}}"><span class="sr-only">Project</span>
+      <select name="project">
+        <option value="">All projects</option>
+        {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.EnvSet}} is-set{{end}}"><span class="sr-only">Environment</span>
+      <select name="env">
+        <option value="">Any environment</option>
+        {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Release}} is-set{{end}}"><span class="sr-only">Release</span>
+      <select name="release">
+        <option value="">Any release</option>
+        {{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Type}} is-set{{end}}"><span class="sr-only">Exception</span>
+      <select name="type">
+        <option value="">Any exception</option>
+        {{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{classShort .}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Range}} is-set{{end}}"><span class="sr-only">Seen</span>
+      <select name="range">
+        <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
+        <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
+        <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
+        <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
+        <option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>Last 90 days</option>
+      </select>
+    </label>
+    {{if $f.Filtered}}<a class="pill-clear" href="/issues">Clear filters</a>{{end}}
+    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
   </div>
 </form>
 
@@ -78,15 +81,11 @@
   {{if .Data.Rows}}
   <div class="results-bar">
     <span class="muted small">Showing <strong>{{.Data.First}}–{{.Data.Last}}</strong>{{if .Data.Page.HasNext}} and more{{end}}</span>
-    <nav class="seg" aria-label="Sort issues">
-      <a href="{{$f.SortURL "last_seen"}}" hx-get="{{$f.SortURL "last_seen"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" {{if eq $f.Sort "last_seen"}}aria-current="true"{{end}}>Last seen</a>
-      <a href="{{$f.SortURL "count"}}" hx-get="{{$f.SortURL "count"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" {{if eq $f.Sort "count"}}aria-current="true"{{end}}>Events</a>
-      <a href="{{$f.SortURL "first_seen"}}" hx-get="{{$f.SortURL "first_seen"}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" {{if eq $f.Sort "first_seen"}}aria-current="true"{{end}}>Newest</a>
-    </nav>
   </div>
   <div class="issue-list">
     {{range .Data.Rows}}{{template "issue_card" (dict "Row" . "CSRF" $.CSRF "Next" $f.ListURL)}}{{end}}
   </div>
+  {{if or (gt .Data.Page.Page 1) .Data.Page.HasNext}}
   <nav class="pager card" aria-label="Pages">
     <span class="muted small">{{.Data.First}}–{{.Data.Last}}</span>
     <span class="row">
@@ -94,6 +93,7 @@
       {{if .Data.Page.HasNext}}<a class="btn" href="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Next</a>{{end}}
     </span>
   </nav>
+  {{end}}
   {{else}}
   <div class="card empty">
     {{if $f.Filtered}}

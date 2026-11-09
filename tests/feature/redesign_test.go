@@ -90,3 +90,23 @@ func TestIssueDetailInsights(t *testing.T) {
 		}
 	}
 }
+
+func TestThemeSwitchOnEveryPage(t *testing.T) {
+	t.Parallel()
+	a := testutil.NewApp(t)
+	check := func(name, body string) {
+		t.Helper()
+		js, css := strings.Index(body, "/static/js/theme.js"), strings.Index(body, "/static/css/app.css")
+		if js < 0 || css < 0 || js > css {
+			t.Errorf("%s: theme.js must load before the stylesheet so the saved theme applies before paint", name)
+		}
+		for _, theme := range []string{"system", "light", "dark"} {
+			if !contains(body, `data-theme-set="`+theme+`"`) {
+				t.Errorf("%s: no %q button in the theme switch", name, theme)
+			}
+		}
+	}
+	check("login", a.Get("/login").Body)
+	a.LoginAdmin()
+	check("overview", a.Get("/").Body)
+}

@@ -94,6 +94,7 @@ func New(opts Options) (*Handler, error) {
 
 	authed := http.NewServeMux()
 	authed.HandleFunc("POST /logout", h.logout)
+	authed.HandleFunc("POST /scope", h.setScope)
 	authed.HandleFunc("GET /{$}", h.overview)
 	authed.HandleFunc("GET /projects", h.projectList)
 	authed.HandleFunc("GET /projects/new", h.projectNew)
@@ -204,7 +205,6 @@ func (h *Handler) parseTemplates() error {
 		},
 		"hasString": slices.Contains[[]string],
 		"lower":     strings.ToLower,
-		"today":     func() string { return time.Now().Format("Monday, 2 January 2006") },
 		"signed": func(n int64) string {
 			if n > 0 {
 				return "+" + compact(n)
@@ -277,12 +277,18 @@ type page struct {
 	Version string
 	Flash   string
 	Data    any
+	// Scope is the project and environment switcher, on full dashboard pages.
+	Scope *scopeView
 }
 
 func (h *Handler) newPage(r *http.Request, title, nav string, data any) page {
 	p := page{Title: title, Nav: nav, CSRF: csrfFrom(r.Context()), Version: h.opts.Version, Data: data}
 	if u, ok := userFrom(r.Context()); ok {
 		p.User = &u
+		if !isHTMX(r) { // fragments don't render the switcher
+			sv := h.scopeView(r)
+			p.Scope = &sv
+		}
 	}
 	return p
 }
@@ -353,7 +359,18 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	stats, err := h.store.Stats(ctx)
+	// The overview follows the project picked in the switcher. Environment
+	// isn't applied here: daily totals aren't kept per environment.
+	names, projects, err := h.projectNames(r)
+	if err != nil {
+		h.serverError(w, err)
+		return
+	}
+	scope := scopeFrom(r)
+	if _, ok := names[scope.ProjectID]; !ok {
+		scope.ProjectID = 0
+	}
+	stats, err := h.store.Stats(ctx, scope.ProjectID)
 	if err != nil {
 		h.serverError(w, err)
 		return
@@ -366,7 +383,7 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 	case "14d":
 		days = 14
 	}
-	history, err := h.store.Trend(ctx, heatmapWeeks*7, 0)
+	history, err := h.store.Trend(ctx, heatmapWeeks*7, scope.ProjectID)
 	if err != nil {
 		h.serverError(w, err)
 		return
@@ -377,23 +394,21 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	recent, err := h.store.ListIssues(ctx, store.IssueFilter{Status: store.IssueUnresolved, PerPage: 6})
+	recent, err := h.store.ListIssues(ctx, store.IssueFilter{Status: store.IssueUnresolved, PerPage: 6, ProjectID: scope.ProjectID})
 	if err != nil {
 		h.serverError(w, err)
 		return
 	}
-	failures, err := h.store.RecentQueueFailures(ctx, 6)
-	if err != nil {
-		h.serverError(w, err)
-		return
-	}
-	names, projects, err := h.projectNames(r)
+	failures, err := h.store.RecentQueueFailures(ctx, scope.ProjectID, 6)
 	if err != nil {
 		h.serverError(w, err)
 		return
 	}
 	cards := make([]projectCard, 0, len(projects))
 	for _, p := range projects {
+		if scope.ProjectID != 0 && p.ID != scope.ProjectID {
+			continue
+		}
 		a := activity[p.ID]
 		if a == nil {
 			a = &store.ProjectActivity{ProjectID: p.ID, Days: make([]int64, 7)}
@@ -405,6 +420,7 @@ func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {
 		"DisabledProjects": disabled,
 		"Stats":            stats,
 		"Range":            days,
+		"ScopeName":        names[scope.ProjectID],
 		"Chart":            newBarChart(fmt.Sprintf("Events per day, last %d days", days), trend, []string{"Errors", "Failed jobs"}),
 		"Heatmap":          newHeatmap(history, heatmapWeeks),
 		"Cards":            cards,

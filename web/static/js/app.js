@@ -70,6 +70,46 @@
     if (field.select) field.select();
   });
 
+  // Theme switch: <button data-theme-set="system|light|dark">. The choice is
+  // saved per browser; js/theme.js applies it on the next page before paint.
+  var THEME_KEY = "faultbox-theme";
+  function savedTheme() {
+    try {
+      var t = window.localStorage.getItem(THEME_KEY);
+      return t === "light" || t === "dark" ? t : "system";
+    } catch (e) {
+      return "system";
+    }
+  }
+  function markTheme(theme) {
+    document.querySelectorAll("[data-theme-set]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-theme-set") === theme));
+    });
+  }
+  function setTheme(theme) {
+    var root = document.documentElement;
+    if (theme === "system") {
+      root.removeAttribute("data-theme");
+    } else {
+      root.setAttribute("data-theme", theme);
+    }
+    try {
+      if (theme === "system") {
+        window.localStorage.removeItem(THEME_KEY);
+      } else {
+        window.localStorage.setItem(THEME_KEY, theme);
+      }
+    } catch (e) {
+      // Not saved, but the page still switches.
+    }
+    markTheme(theme);
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-theme-set]");
+    if (btn) setTheme(btn.getAttribute("data-theme-set"));
+  });
+  markTheme(savedTheme());
+
   // <form data-confirm="..."> asks before a plain (non-HTMX) submit.
   document.addEventListener("submit", function (e) {
     var msg = e.target.getAttribute("data-confirm");

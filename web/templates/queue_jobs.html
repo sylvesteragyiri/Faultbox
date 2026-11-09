@@ -7,58 +7,59 @@
   </div>
 </header>
 
-<form class="card filters" method="get" action="/queue-failures/jobs"
+<form class="filter-bar" method="get" action="/queue-failures/jobs"
       hx-get="/queue-failures/jobs" hx-target="#job-results" hx-swap="outerHTML" hx-push-url="true"
       hx-trigger="change, submit">
-  <label>Project
-    <select name="project">
-      <option value="">All projects</option>
-      {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
-  <label>Job class
-    <select name="job">
-      <option value="">Any</option>
-      {{range .Data.Facets.JobNames}}<option value="{{.}}" {{if eq $f.Job .}}selected{{end}}>{{truncate . 60}}</option>{{end}}
-      {{if and $f.Job (not (hasString .Data.Facets.JobNames $f.Job))}}<option value="{{$f.Job}}" selected>{{truncate $f.Job 60}}</option>{{end}}
-    </select>
-  </label>
-  <label>Queue
-    <select name="queue">
-      <option value="">Any</option>
-      {{range .Data.Facets.Queues}}<option {{if eq $f.Queue .}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
-  <label>Connection
-    <select name="connection">
-      <option value="">Any</option>
-      {{range .Data.Facets.Connections}}<option {{if eq $f.Connection .}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
-  <label>Environment
-    <select name="env">
-      <option value="">Any</option>
-      {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
-  <label>Kind
-    <select name="kind">
-      <option value="failures" {{if eq $f.Kind "failures"}}selected{{end}}>Failures</option>
-      <option value="attempt" {{if eq $f.Kind "attempt"}}selected{{end}}>Failed retries</option>
-      <option value="all" {{if eq $f.Kind "all"}}selected{{end}}>All</option>
-    </select>
-  </label>
-  <label>Failed
-    <select name="range">
-      <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
-      <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
-      <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
-      <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
-    </select>
-  </label>
-  <div class="filter-actions">
-    <button class="btn" type="submit">Apply</button>
-    {{if $f.Filtered}}<a class="btn btn-link" href="/queue-failures/jobs">Clear filters</a>{{end}}
+  <div class="filter-row">
+    <fieldset class="seg seg-radio">
+      <legend class="sr-only">Kind</legend>
+      <label><input type="radio" name="kind" value="failures" {{if eq $f.Kind "failures"}}checked{{end}}><span>Failures</span></label>
+      <label><input type="radio" name="kind" value="attempt" {{if eq $f.Kind "attempt"}}checked{{end}}><span>Retries</span></label>
+      <label><input type="radio" name="kind" value="all" {{if eq $f.Kind "all"}}checked{{end}}><span>All</span></label>
+    </fieldset>
+  </div>
+  <div class="pill-row">
+    <label class="pill{{if $f.ProjectSet}} is-set{{end}}"><span class="sr-only">Project</span>
+      <select name="project">
+        <option value="">All projects</option>
+        {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Job}} is-set{{end}}"><span class="sr-only">Job class</span>
+      <select name="job">
+        <option value="">Any job</option>
+        {{range .Data.Facets.JobNames}}<option value="{{.}}" {{if eq $f.Job .}}selected{{end}}>{{classShort .}}</option>{{end}}
+        {{if and $f.Job (not (hasString .Data.Facets.JobNames $f.Job))}}<option value="{{$f.Job}}" selected>{{classShort $f.Job}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Queue}} is-set{{end}}"><span class="sr-only">Queue</span>
+      <select name="queue">
+        <option value="">Any queue</option>
+        {{range .Data.Facets.Queues}}<option {{if eq $f.Queue .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Connection}} is-set{{end}}"><span class="sr-only">Connection</span>
+      <select name="connection">
+        <option value="">Any connection</option>
+        {{range .Data.Facets.Connections}}<option {{if eq $f.Connection .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.EnvSet}} is-set{{end}}"><span class="sr-only">Environment</span>
+      <select name="env">
+        <option value="">Any environment</option>
+        {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Range}} is-set{{end}}"><span class="sr-only">Failed</span>
+      <select name="range">
+        <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
+        <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
+        <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
+        <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
+      </select>
+    </label>
+    {{if $f.Filtered}}<a class="pill-clear" href="/queue-failures/jobs">Clear filters</a>{{end}}
+    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
   </div>
 </form>
 

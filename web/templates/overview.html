@@ -2,7 +2,7 @@
 <header class="page-head">
   <div>
     <h1>Overview</h1>
-    <p class="page-sub">Errors and failed jobs across every project.</p>
+    <p class="page-sub">{{with .Data.ScopeName}}Errors and failed jobs in {{.}}.{{else}}Errors and failed jobs across every project.{{end}}</p>
   </div>
 </header>
 {{with .Data}}

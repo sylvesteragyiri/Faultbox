@@ -6,6 +6,7 @@
   <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'>
   <title>{{.Title}} · Faultbox</title>
   <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
+  <script src="{{asset "js/theme.js"}}"></script>
   <link rel="stylesheet" href="{{asset "css/app.css"}}">
   <script src="{{asset "vendor/htmx.min.js"}}" defer></script>
   <script src="{{asset "js/app.js"}}" defer></script>
@@ -44,10 +45,7 @@
     </aside>
     <div class="workspace">
       <header class="topbar">
-        <div class="topbar-date">
-          <span class="muted small">{{today}}</span>
-          <strong>{{.Title}}</strong>
-        </div>
+        {{with .Scope}}{{template "scope_switcher" (dict "Scope" . "CSRF" $.CSRF)}}{{end}}
         <form class="topbar-search" method="get" action="/issues" role="search">
           {{template "icon" "search"}}
           <label class="sr-only" for="global-search">Search</label>
@@ -56,6 +54,7 @@
           <input type="hidden" name="category" value="all">
           <kbd aria-hidden="true">/</kbd>
         </form>
+        {{template "theme_switch"}}
         <div class="topbar-actions">
           <a class="btn btn-ghost" href="/projects/new">{{template "icon" "plus"}}<span>New project</span></a>
         </div>
@@ -67,6 +66,7 @@
     </div>
   </div>
 {{else}}
+  <div class="bare-theme">{{template "theme_switch"}}</div>
   <main class="bare" id="main">{{template "content" .}}</main>
 {{end}}
 </body>

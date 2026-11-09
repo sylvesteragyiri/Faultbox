@@ -100,14 +100,20 @@ type IssueStats struct {
 }
 
 // Stats counts issues and events across all projects.
-func (s *Store) Stats(ctx context.Context) (IssueStats, error) {
+// Stats counts issues and events, for every project or one (projectID > 0).
+func (s *Store) Stats(ctx context.Context, projectID int64) (IssueStats, error) {
 	var st IssueStats
 	dayStart := s.now().UTC().Truncate(24 * time.Hour).UnixMilli()
-	err := s.reader.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(status = 'unresolved'), 0), COALESCE(SUM(first_seen_at >= ?), 0),
-		        COALESCE(SUM(occurrence_count), 0), COALESCE(SUM(CASE WHEN category = 'queue_failure' THEN occurrence_count ELSE 0 END), 0)
-		   FROM issues`, dayStart,
-	).Scan(&st.Total, &st.Unresolved, &st.NewToday, &st.Events, &st.QueueFailures)
+	query := `SELECT COUNT(*), COALESCE(SUM(status = 'unresolved'), 0), COALESCE(SUM(first_seen_at >= ?), 0),
+	                 COALESCE(SUM(occurrence_count), 0), COALESCE(SUM(CASE WHEN category = 'queue_failure' THEN occurrence_count ELSE 0 END), 0)
+	            FROM issues`
+	args := []any{dayStart}
+	if projectID > 0 {
+		query += ` WHERE project_id = ?`
+		args = append(args, projectID)
+	}
+	err := s.reader.QueryRowContext(ctx, query, args...).
+		Scan(&st.Total, &st.Unresolved, &st.NewToday, &st.Events, &st.QueueFailures)
 	return st, err
 }
 

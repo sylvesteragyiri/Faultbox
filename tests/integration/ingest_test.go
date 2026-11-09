@@ -171,7 +171,7 @@ func TestQueueFailureRowsAreStored(t *testing.T) {
 	if issue.Category != "queue_failure" || issue.JobName != "App\\Jobs\\Sync" {
 		t.Fatalf("issue = %+v", issue)
 	}
-	if stats, _ := st.Stats(ctx); stats.QueueFailures != 1 || stats.Unresolved != 1 || stats.NewToday != 1 {
+	if stats, _ := st.Stats(ctx, 0); stats.QueueFailures != 1 || stats.Unresolved != 1 || stats.NewToday != 1 {
 		t.Fatalf("stats = %+v", stats)
 	}
 }
