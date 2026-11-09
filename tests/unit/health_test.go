@@ -15,7 +15,7 @@ func TestHealthHandlerReturnsOK(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	server.New().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	server.New().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -33,7 +33,7 @@ func TestHealthHandlerRejectsWrongMethod(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	server.New().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/health", nil))
+	server.New().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/health", nil))
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
