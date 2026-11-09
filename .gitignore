@@ -33,3 +33,7 @@ go.work.sum
 # .vscode/
 
 docs
+# Local SQLite databases
+*.db
+*.db-wal
+*.db-shm

@@ -1,62 +1,44 @@
 // Package feature tests user-visible behaviour end to end over real HTTP,
-// against a server running on a local port.
+// against a full Faultbox instance with a temporary database.
 package feature
 
 import (
-	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/sylvesteragyiri/faultbox/internal/server"
 	"github.com/sylvesteragyiri/faultbox/tests/testutil"
 )
 
-func TestHealthEndpointOverHTTP(t *testing.T) {
+func TestHealthAndReadyOverHTTP(t *testing.T) {
 	t.Parallel()
+	a := testutil.NewApp(t)
 
-	srv := httptest.NewServer(server.New())
-	t.Cleanup(srv.Close)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/health", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatalf("GET /health: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	body := testutil.DecodeJSON[map[string]string](t, resp.Body)
-	if body["status"] != "ok" {
-		t.Fatalf("status field = %q, want ok", body["status"])
+	for path, want := range map[string]string{"/health": "ok", "/ready": "ready"} {
+		resp := a.API(http.MethodGet, path, "")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: status %d, body %s", path, resp.StatusCode, resp.Body)
+		}
+		if !contains(resp.Body, `"status":"`+want+`"`) {
+			t.Fatalf("GET %s: body %s, want status %q", path, resp.Body, want)
+		}
 	}
 }
 
-func TestUnknownRouteReturnsNotFound(t *testing.T) {
+func TestReadyFailsWhenDatabaseIsClosed(t *testing.T) {
 	t.Parallel()
-
-	srv := httptest.NewServer(server.New())
-	t.Cleanup(srv.Close)
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/does-not-exist", nil)
-	if err != nil {
+	a := testutil.NewApp(t)
+	if err := a.Store().Close(); err != nil {
 		t.Fatal(err)
 	}
-	resp, err := srv.Client().Do(req)
-	if err != nil {
-		t.Fatalf("GET /does-not-exist: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	resp := a.API(http.MethodGet, "/ready", "")
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status %d, want 503", resp.StatusCode)
+	}
+	if !contains(resp.Body, `"database":"unavailable"`) {
+		t.Fatalf("body %s", resp.Body)
+	}
+	if resp := a.API(http.MethodGet, "/health", ""); resp.StatusCode != http.StatusOK {
+		t.Fatalf("liveness must not depend on the database: status %d", resp.StatusCode)
 	}
 }

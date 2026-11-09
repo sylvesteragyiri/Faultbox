@@ -1,0 +1,26 @@
+{{define "content"}}
+<div class="login card">
+  <h1 class="login-title"><img src="/static/favicon.svg" alt="" width="28" height="28"> Faultbox</h1>
+  {{with .Data}}
+  {{if .NoUsers}}
+    <div class="alert alert-warn">
+      <strong>No dashboard users yet.</strong>
+      Set <code>FAULTBOX_ADMIN_EMAIL</code> and <code>FAULTBOX_ADMIN_PASSWORD</code> and restart, or run:
+      <pre>echo 'a-long-password' | faultbox user create --email you@example.com</pre>
+    </div>
+  {{end}}
+  {{template "form_error" .Error}}
+  <form method="post" action="/login" class="stack">
+    {{template "csrf" $.CSRF}}
+    <input type="hidden" name="next" value="{{.Next}}">
+    <label>Email
+      <input type="email" name="email" value="{{.Email}}" autocomplete="username" required autofocus>
+    </label>
+    <label>Password
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn btn-primary" type="submit">Log in</button>
+  </form>
+  {{end}}
+</div>
+{{end}}

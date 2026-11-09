@@ -1,0 +1,44 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'>
+  <title>{{.Title}} · Faultbox</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/vendor/htmx.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+{{if .User}}
+  <div class="shell">
+    <nav class="sidebar" aria-label="Main">
+      <a class="brand" href="/"><img src="/static/favicon.svg" alt="" width="22" height="22"> Faultbox</a>
+      <ul>
+        <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>Overview</a></li>
+        <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}>Issues</a></li>
+        <li><a href="/queue-failures" {{if eq .Nav "queue"}}aria-current="page"{{end}}>Queue Failures</a></li>
+        <li><a href="/projects" {{if eq .Nav "projects"}}aria-current="page"{{end}}>Projects</a></li>
+        <li><a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>Notifications</a></li>
+        <li><a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a></li>
+      </ul>
+      <div class="sidebar-foot">
+        <span class="muted small truncate" title="{{.User.Email}}">{{.User.Email}}</span>
+        <form method="post" action="/logout">
+          {{template "csrf" .CSRF}}
+          <button class="btn btn-link small" type="submit">Log out</button>
+        </form>
+        <span class="muted small">{{.Version}}</span>
+      </div>
+    </nav>
+    <main class="main" id="main">
+      {{if .Flash}}<div class="alert alert-ok" role="status">{{.Flash}}</div>{{end}}
+      {{template "content" .}}
+    </main>
+  </div>
+{{else}}
+  <main class="bare" id="main">{{template "content" .}}</main>
+{{end}}
+</body>
+</html>{{end}}

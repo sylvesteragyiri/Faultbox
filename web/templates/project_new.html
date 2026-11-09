@@ -1,0 +1,19 @@
+{{define "content"}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/projects">Projects</a> /</p>
+    <h1>New project</h1>
+  </div>
+</header>
+<div class="card narrow">
+  {{template "form_error" .Data.Error}}
+  <form method="post" action="/projects" class="stack">
+    {{template "csrf" .CSRF}}
+    {{template "project_fields" .Data}}
+    <div class="row">
+      <button class="btn btn-primary" type="submit">Create project</button>
+      <a class="btn" href="/projects">Cancel</a>
+    </div>
+  </form>
+</div>
+{{end}}

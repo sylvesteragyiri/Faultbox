@@ -1,0 +1,71 @@
+{{define "content"}}
+{{$p := .Data.Project}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/projects">Projects</a> /</p>
+    <h1>{{$p.Name}}</h1>
+  </div>
+</header>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Details</h2>
+    <dl class="details">
+      <dt>Slug</dt><dd class="mono">{{$p.Slug}}</dd>
+      <dt>Project ID</dt><dd class="mono">{{$p.ID}}</dd>
+      <dt>Created</dt><dd><time datetime="{{isoTime $p.CreatedAt}}">{{datetime $p.CreatedAt}}</time></dd>
+      <dt>Last event</dt><dd>{{timeago $p.LastEventAt}}</dd>
+    </dl>
+  </section>
+  {{template "status_panel" .}}
+</div>
+
+<section class="card">
+  <h2>Settings</h2>
+  {{template "form_error" .Data.Form.Error}}
+  <form method="post" action="/projects/{{$p.ID}}" class="stack narrow">
+    {{template "csrf" .CSRF}}
+    {{template "project_fields" .Data.Form}}
+    <div><button class="btn btn-primary" type="submit">Save</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>API key</h2>
+  <dl class="details">
+    <dt>Current key</dt><dd class="mono">{{$p.APIKeyHint}}</dd>
+    <dt>Issued</dt><dd><time datetime="{{isoTime $p.APIKeyRotatedAt}}">{{datetime $p.APIKeyRotatedAt}}</time></dd>
+  </dl>
+  <form method="post" action="/projects/{{$p.ID}}/key"
+        data-confirm="Regenerate the API key? The current key stops working immediately, so every app using it must be updated.">
+    {{template "csrf" .CSRF}}
+    <button class="btn btn-danger" type="submit">Regenerate key</button>
+  </form>
+</section>
+{{end}}
+
+{{define "status_panel"}}
+{{$p := .Data.Project}}
+<section class="card" id="status-panel">
+  <h2>Status</h2>
+  <p>{{template "status_badge" $p.Status}}</p>
+  {{if $p.Active}}
+    <p class="muted">The project accepts events sent with its API key.</p>
+    <form method="post" action="/projects/{{$p.ID}}/status"
+          hx-post="/projects/{{$p.ID}}/status" hx-target="#status-panel" hx-swap="outerHTML"
+          hx-confirm="Disable {{$p.Name}}? Its API key will be rejected until you enable it again.">
+      {{template "csrf" .CSRF}}
+      <input type="hidden" name="status" value="disabled">
+      <button class="btn btn-danger" type="submit">Disable project</button>
+    </form>
+  {{else}}
+    <p class="muted">Requests with this project's key are rejected with <code>403 project_disabled</code>.</p>
+    <form method="post" action="/projects/{{$p.ID}}/status"
+          hx-post="/projects/{{$p.ID}}/status" hx-target="#status-panel" hx-swap="outerHTML">
+      {{template "csrf" .CSRF}}
+      <input type="hidden" name="status" value="active">
+      <button class="btn" type="submit">Enable project</button>
+    </form>
+  {{end}}
+</section>
+{{end}}

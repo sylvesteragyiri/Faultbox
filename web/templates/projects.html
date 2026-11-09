@@ -1,0 +1,31 @@
+{{define "content"}}
+<header class="page-head">
+  <h1>Projects</h1>
+  <a class="btn btn-primary" href="/projects/new">New project</a>
+</header>
+{{if .Data}}
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Environments</th><th>API key</th><th>Status</th><th>Last event</th><th>Created</th></tr></thead>
+    <tbody>
+    {{range .Data}}
+      <tr>
+        <td><a href="/projects/{{.ID}}"><strong>{{.Name}}</strong></a><div class="muted small mono">{{.Slug}}</div></td>
+        <td>{{range .Environments}}<span class="tag">{{.}}</span> {{else}}<span class="muted">Any</span>{{end}}</td>
+        <td class="mono small">{{.APIKeyHint}}</td>
+        <td>{{template "status_badge" .Status}}</td>
+        <td class="muted">{{timeago .LastEventAt}}</td>
+        <td class="muted"><time datetime="{{isoTime .CreatedAt}}">{{datetime .CreatedAt}}</time></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="card empty">
+  <h2>No projects yet</h2>
+  <p class="muted">Each Laravel application reports to its own project with its own API key.</p>
+  <a class="btn btn-primary" href="/projects/new">Create your first project</a>
+</div>
+{{end}}
+{{end}}

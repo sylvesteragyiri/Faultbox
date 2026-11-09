@@ -1,0 +1,34 @@
+{{define "content"}}
+{{$p := .Data.Project}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/projects">Projects</a> / <a href="/projects/{{$p.ID}}">{{$p.Name}}</a> /</p>
+    <h1>{{if .Data.Created}}Project created{{else}}New API key{{end}}</h1>
+  </div>
+</header>
+{{template "key_panel" .}}
+<p><a class="btn" href="/projects/{{$p.ID}}">Continue to project</a></p>
+{{end}}
+
+{{define "key_panel"}}
+{{$p := .Data.Project}}
+<section class="card" id="key-panel">
+  <div class="alert alert-warn" role="alert">
+    <strong>Copy this key now.</strong> Faultbox stores only a hash of it, so it can't be shown again.
+    If you lose it, regenerate a new one.
+  </div>
+  <label>API key for {{$p.Name}}
+    <span class="copy-row">
+      <input id="api-key" class="mono" type="text" value="{{.Data.Key}}" readonly>
+      <button class="btn" type="button" data-copy="#api-key">Copy</button>
+    </span>
+  </label>
+  <h3>Laravel <code>.env</code></h3>
+  <pre id="env-snippet">FAULTBOX_ENABLED=true
+FAULTBOX_DSN={{.Data.DSN}}
+FAULTBOX_API_KEY={{.Data.Key}}
+FAULTBOX_ENVIRONMENT={{if $p.Environments}}{{index $p.Environments 0}}{{else}}production{{end}}
+FAULTBOX_RELEASE=</pre>
+  <button class="btn" type="button" data-copy="#env-snippet">Copy snippet</button>
+</section>
+{{end}}

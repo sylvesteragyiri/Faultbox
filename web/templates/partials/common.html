@@ -1,0 +1,15 @@
+{{define "csrf"}}<input type="hidden" name="csrf_token" value="{{.}}">{{end}}
+
+{{define "form_error"}}{{if .}}<div class="alert alert-error" role="alert">{{.}}</div>{{end}}{{end}}
+
+{{define "status_badge"}}{{if eq . "active"}}<span class="badge badge-ok">Active</span>{{else}}<span class="badge badge-off">Disabled</span>{{end}}{{end}}
+
+{{define "project_fields"}}
+<label>Name
+  <input type="text" name="name" value="{{.Name}}" maxlength="100" required>
+</label>
+<label>Environments
+  <input type="text" name="environments" value="{{.Environments}}" placeholder="production, staging">
+  <span class="hint">Separate with commas. Leave empty to accept any environment.</span>
+</label>
+{{end}}

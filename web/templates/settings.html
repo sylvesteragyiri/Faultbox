@@ -1,0 +1,17 @@
+{{define "content"}}
+<header class="page-head"><h1>Settings</h1></header>
+{{with .Data}}
+<section class="card">
+  <h2>System</h2>
+  <dl class="details">
+    <dt>Version</dt><dd class="mono">{{$.Version}}</dd>
+    <dt>Schema version</dt><dd class="mono">{{.SchemaVersion}}</dd>
+    <dt>Database</dt><dd class="mono">{{.DatabasePath}}</dd>
+    <dt>Database size</dt><dd>{{bytes .DatabaseSize}}</dd>
+    <dt>Event retention</dt><dd>{{.RetentionDays}} days</dd>
+    <dt>Dashboard users</dt><dd>{{.Users}}</dd>
+  </dl>
+  <p class="muted small">Add users with <code>faultbox user create --email …</code>, passing the password on stdin.</p>
+</section>
+{{end}}
+{{end}}
