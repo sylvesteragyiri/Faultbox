@@ -98,10 +98,11 @@ func (f issueForm) filter(now time.Time) store.IssueFilter {
 		Category: f.Category, Environment: f.Env, Release: f.Release, ExceptionType: f.Type,
 		Search: f.Q, Sort: f.Sort, Page: f.Page, PerPage: 25,
 	}
-	if f.Assigned == "mine" {
+	switch f.Assigned {
+	case "mine":
 		// The current user ID is added by issueList after parsing the URL.
 		sf.AssigneeID = -1
-	} else if f.Assigned == "unassigned" {
+	case "unassigned":
 		sf.Unassigned = true
 	}
 	sf.ProjectID, _ = strconv.ParseInt(f.Project, 10, 64)
@@ -527,7 +528,7 @@ func (h *Handler) issueAssign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logger.Info("issue assignment changed", "issue_id", is.ID, "assigned_user_id", userID, "user_id", h.userID(r))
-	http.Redirect(w, r, issueListReturnPath(r.PostFormValue("next")), http.StatusSeeOther)
+	http.Redirect(w, r, issueListReturnPath(r.PostFormValue("next")), http.StatusSeeOther) //nolint:gosec // G710: issueListReturnPath only returns a local /issues URL
 }
 
 func (h *Handler) issueBulk(w http.ResponseWriter, r *http.Request) {
@@ -569,7 +570,7 @@ func (h *Handler) issueBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logger.Info("bulk issue update", "issue_count", len(ids), "operation", operation, "user_id", h.userID(r))
-	http.Redirect(w, r, issueListReturnPath(r.PostFormValue("next")), http.StatusSeeOther)
+	http.Redirect(w, r, issueListReturnPath(r.PostFormValue("next")), http.StatusSeeOther) //nolint:gosec // G710: issueListReturnPath only returns a local /issues URL
 }
 
 func issueListReturnPath(next string) string {

@@ -342,24 +342,6 @@ func (h *Handler) render(w http.ResponseWriter, status int, name, block string, 
 	_, _ = buf.WriteTo(w)
 }
 
-// renderPartial executes one template block with arbitrary data, for HTMX
-// fragments that aren't driven by a full page.
-func (h *Handler) renderPartial(w http.ResponseWriter, name, block string, data any) {
-	t, ok := h.pages[name]
-	if !ok {
-		h.serverError(w, fmt.Errorf("unknown template %q", name))
-		return
-	}
-	var buf bytes.Buffer
-	if err := t.ExecuteTemplate(&buf, block, data); err != nil {
-		h.serverError(w, fmt.Errorf("render %s/%s: %w", name, block, err))
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = buf.WriteTo(w)
-}
-
 func (h *Handler) serverError(w http.ResponseWriter, err error) {
 	h.logger.Error("dashboard error", "error", err)
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)

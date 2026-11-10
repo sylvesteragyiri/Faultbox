@@ -78,6 +78,7 @@
           <td class="issue-message-cell" data-issue-tooltip="{{$r.Message}}">
             <a class="issue-name" href="/issues/{{$r.ID}}" title="{{$r.Message}}" aria-label="{{if $r.JobName}}{{$r.JobName}}{{else}}{{$r.ExceptionType}}{{end}}: {{$r.Message}}">{{if $r.JobName}}{{$r.JobName}}{{else}}{{$r.ExceptionType}}{{end}}</a>
             <p class="issue-summary mono">{{truncate $r.Message 180}}</p>
+            {{template "issue_badges" $r}}
             <span class="sr-only">{{$r.Culprit}}</span>
           </td>
           <td class="num mono">{{compact $r.OccurrenceCount}}</td>
