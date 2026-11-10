@@ -47,12 +47,13 @@
 </section>
 
 <section class="card">
-  <div class="section-head"><h2>Recent failures</h2></div>
+  <div class="section-head"><h2>Recent failures</h2>{{if eq $p.Nav "app_notifications"}}<a class="small" href="/issues?category=notification&amp;status=all">All notification issues</a>{{end}}</div>
   {{if .Failures}}
   <ul class="list">
     {{range .Failures}}
     <li>
-      <span class="issue-title">{{if eq .Name "raw"}}Raw mail{{else}}{{classShort .Name}}{{end}}</span> <span class="tag">{{.Channel}}</span>
+      {{if .IssueID}}<a class="issue-title" href="/issues/{{.IssueID}}?event={{.UUID}}#event">{{classShort .Name}}</a>{{else}}<span class="issue-title">{{if eq .Name "raw"}}Raw mail{{else}}{{classShort .Name}}{{end}}</span>{{end}} <span class="tag">{{.Channel}}</span>
+      {{if eq .IssueStatus "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq .IssueStatus "ignored"}}<span class="badge">Ignored</span>{{end}}
       <div class="issue-message"><span class="mono small">{{classShort .ErrorType}}</span>: {{truncate .ErrorMessage 220}}</div>
       <div class="muted small">{{index $.Data.Names .ProjectID}} · {{.Environment}} · {{if eq $p.Extra "to"}}to {{classShort .Extra}}{{else}}{{.Extra}} recipient{{if ne .Extra "1"}}s{{end}}{{end}}{{if .Release}} · {{.Release}}{{end}} · <time datetime="{{isoTime .OccurredAt}}" title="{{datetime .OccurredAt}}">{{timeago .OccurredAt}}</time></div>
     </li>

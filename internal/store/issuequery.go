@@ -17,12 +17,14 @@ const (
 	SortFirstSeen = "first_seen"
 )
 
-// Issue list categories: "errors" is exceptions and messages; queue failures
-// get their own view (M5).
+// Issue list categories: "errors" is exceptions, messages and failed
+// notifications; queue failures get their own view (M5), and notifications
+// can be listed on their own too.
 const (
-	CategoryErrors = "errors"
-	CategoryQueue  = "queue_failure"
-	CategoryAll    = "all"
+	CategoryErrors       = "errors"
+	CategoryQueue        = "queue_failure"
+	CategoryNotification = "notification"
+	CategoryAll          = "all"
 )
 
 // MaxIssuePage bounds OFFSET so deep pages can't turn into long scans.
@@ -32,7 +34,7 @@ const MaxIssuePage = 400
 type IssueFilter struct {
 	ProjectID     int64
 	Status        string // unresolved, resolved, ignored, or "" for all
-	Category      string // errors, queue_failure, all ("" = errors)
+	Category      string // errors, queue_failure, notification, all ("" = errors)
 	Environment   string
 	Release       string
 	ExceptionType string
@@ -118,9 +120,11 @@ func issueQuery(f IssueFilter) (string, []any) {
 	}
 	switch f.Category {
 	case CategoryErrors:
-		add("i.category IN ('exception', 'message')")
+		add("i.category IN ('exception', 'message', 'notification')")
 	case CategoryQueue:
 		add("i.category = 'queue_failure'")
+	case CategoryNotification:
+		add("i.category = 'notification'")
 	}
 	if f.Environment != "" {
 		add("i.id IN (SELECT issue_id FROM issue_environments WHERE environment = ?)", f.Environment)

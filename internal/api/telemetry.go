@@ -75,13 +75,16 @@ func (h *Handler) telemetryHandler() http.HandlerFunc {
 			return
 		}
 
-		duplicate, err := h.store.IngestTelemetry(r.Context(), project.ID, valid)
+		duplicate, issues, err := h.store.IngestTelemetry(r.Context(), project.ID, valid)
 		if err != nil {
 			h.logger.Error("store telemetry batch", "project_id", project.ID, "error", err)
 			w.Header().Set("Retry-After", "5")
 			httpx.WriteError(w, http.StatusServiceUnavailable, "store_failed",
 				"The batch could not be stored. Retry the same batch (same batch_id) later.")
 			return
+		}
+		if len(issues) > 0 && o.OnResults != nil {
+			o.OnResults(issues)
 		}
 		resp := TelemetryResponse{Status: "accepted", Count: len(valid.Notifications) + len(valid.Mails) + len(valid.Commands) + len(valid.Cache)}
 		if duplicate {

@@ -2,7 +2,11 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -67,12 +71,14 @@ type TelemetryBatch struct {
 
 // IngestTelemetry stores a batch in one transaction. A batch ID that was
 // already stored is skipped and reported as a duplicate, so SDK retries
-// never double-count.
-func (s *Store) IngestTelemetry(ctx context.Context, projectID int64, b TelemetryBatch) (duplicate bool, err error) {
+// never double-count. Each failed notification is also stored as an event
+// of a notification issue; issues says what that did, for alerts.
+func (s *Store) IngestTelemetry(ctx context.Context, projectID int64, b TelemetryBatch) (duplicate bool, issues []IngestResult, err error) {
+	now := s.nowMs()
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx,
 			`INSERT INTO telemetry_batches (project_id, batch_id, received_at) VALUES (?, ?, ?)
-			 ON CONFLICT (project_id, batch_id) DO NOTHING`, projectID, b.BatchID, s.nowMs())
+			 ON CONFLICT (project_id, batch_id) DO NOTHING`, projectID, b.BatchID, now)
 		if err != nil {
 			return err
 		}
@@ -80,17 +86,37 @@ func (s *Store) IngestTelemetry(ctx context.Context, projectID int64, b Telemetr
 			duplicate = true
 			return nil
 		}
+		var lastFailure int64
 		for _, n := range b.Notifications {
-			if err := ingestDelivery(ctx, tx, NotificationDeliveries, projectID, delivery{
+			stored, err := ingestDelivery(ctx, tx, NotificationDeliveries, projectID, delivery{
 				uuid: n.UUID, env: n.Environment, release: n.Release, name: n.Notification, channel: n.Channel,
 				extra: n.Notifiable, failed: n.Failed, errType: n.ErrorType, errMsg: n.ErrorMessage,
 				correlation: n.CorrelationID, at: n.OccurredAt,
-			}); err != nil {
+			})
+			if err != nil {
+				return err
+			}
+			if !stored {
+				continue
+			}
+			r, err := linkNotificationIssue(ctx, tx, projectID, n, now)
+			if err != nil {
+				return fmt.Errorf("notification %s: %w", n.UUID, err)
+			}
+			if !r.Duplicate {
+				issues = append(issues, r)
+				lastFailure = max(lastFailure, n.OccurredAt.UnixMilli())
+			}
+		}
+		if lastFailure > 0 {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE projects SET last_event_at = MAX(COALESCE(last_event_at, 0), ?) WHERE id = ?`,
+				lastFailure, projectID); err != nil {
 				return err
 			}
 		}
 		for _, m := range b.Mails {
-			if err := ingestDelivery(ctx, tx, MailDeliveries, projectID, delivery{
+			if _, err := ingestDelivery(ctx, tx, MailDeliveries, projectID, delivery{
 				uuid: m.UUID, env: m.Environment, release: m.Release, name: m.Mailable, channel: m.Mailer,
 				extra: m.Recipients, failed: m.Failed, errType: m.ErrorType, errMsg: m.ErrorMessage,
 				correlation: m.CorrelationID, at: m.OccurredAt,
@@ -110,7 +136,141 @@ func (s *Store) IngestTelemetry(ctx context.Context, projectID int64, b Telemetr
 		}
 		return nil
 	})
-	return duplicate, err
+	if err != nil || duplicate {
+		return duplicate, nil, err
+	}
+	return false, issues, nil
+}
+
+// ---- notification issues ----
+
+// NotificationFingerprint groups failed notifications into issues: one per
+// notification class, channel and error type, the way an exception groups
+// by type and culprit. The message is left out because it often carries
+// addresses or IDs.
+func NotificationFingerprint(notification, channel, errType string) string {
+	sum := sha256.Sum256([]byte("notification\x00" + notification + "\x00" + channel + "\x00" + errType))
+	return hex.EncodeToString(sum[:])
+}
+
+// notificationContext is what the issue page shows about a failed
+// notification, where an exception would show its request.
+type notificationContext struct {
+	Notification string `json:"notification"`
+	Channel      string `json:"channel"`
+	Notifiable   string `json:"notifiable"`
+}
+
+// notificationEvent turns a failed notification into an issue event. The
+// notification class goes in job_name, which the issue page uses as its
+// heading and search indexes.
+func notificationEvent(projectID int64, n NewAppNotification) (NewEvent, error) {
+	details, err := json.Marshal(notificationContext{Notification: n.Notification, Channel: n.Channel, Notifiable: n.Notifiable})
+	if err != nil {
+		return NewEvent{}, err
+	}
+	sample, err := json.Marshal(map[string]json.RawMessage{"notification": details})
+	if err != nil {
+		return NewEvent{}, err
+	}
+	return NewEvent{
+		ProjectID:     projectID,
+		UUID:          n.UUID,
+		Category:      CategoryNotification,
+		Level:         "error",
+		Environment:   n.Environment,
+		Release:       n.Release,
+		Fingerprint:   NotificationFingerprint(n.Notification, n.Channel, n.ErrorType),
+		ExceptionType: n.ErrorType,
+		Message:       n.ErrorMessage,
+		Culprit:       "via " + n.Channel + " to " + n.Notifiable,
+		Stacktrace:    `{"frames":[]}`,
+		CorrelationID: n.CorrelationID,
+		EventContext:  string(details),
+		SampleContext: string(sample),
+		OccurredAt:    n.OccurredAt,
+		Notification:  n.Notification,
+	}, nil
+}
+
+// linkNotificationIssue stores a failed notification as an issue event and
+// records the issue on the failure row.
+func linkNotificationIssue(ctx context.Context, tx *sql.Tx, projectID int64, n NewAppNotification, now int64) (IngestResult, error) {
+	ev, err := notificationEvent(projectID, n)
+	if err != nil {
+		return IngestResult{}, err
+	}
+	r, err := ingestOne(ctx, tx, &ev, now)
+	if err != nil {
+		return r, err
+	}
+	if r.Duplicate { // an event with this ID was already stored
+		if err := tx.QueryRowContext(ctx, `SELECT issue_id FROM events WHERE project_id = ? AND event_uuid = ?`,
+			projectID, n.UUID).Scan(&r.IssueID); err != nil {
+			return r, err
+		}
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE app_notification_failures SET issue_id = ? WHERE project_id = ? AND uuid = ?`,
+		r.IssueID, projectID, n.UUID)
+	return r, err
+}
+
+// unlinkedFailure is a failed notification stored without an issue.
+type unlinkedFailure struct {
+	projectID int64
+	n         NewAppNotification
+}
+
+// backfillNotificationIssues links failures stored before notification
+// issues existed (migration 00010). It runs when the store opens and only
+// reads failures without an issue, so after the first run it finds none.
+func (s *Store) backfillNotificationIssues(ctx context.Context) error {
+	const batch = 500
+	for {
+		todo, err := s.unlinkedNotificationFailures(ctx, batch)
+		if err != nil || len(todo) == 0 {
+			return err
+		}
+		now := s.nowMs()
+		if err := s.inTx(ctx, func(tx *sql.Tx) error {
+			for _, u := range todo {
+				if _, err := linkNotificationIssue(ctx, tx, u.projectID, u.n, now); err != nil {
+					return fmt.Errorf("notification %s: %w", u.n.UUID, err)
+				}
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("link notification failures to issues: %w", err)
+		}
+		if len(todo) < batch {
+			return nil
+		}
+	}
+}
+
+func (s *Store) unlinkedNotificationFailures(ctx context.Context, limit int) ([]unlinkedFailure, error) {
+	rows, err := s.writer.QueryContext(ctx,
+		`SELECT project_id, uuid, environment, COALESCE(release, ''), notification, channel, notifiable,
+		        error_type, error_message, COALESCE(correlation_id, ''), occurred_at
+		   FROM app_notification_failures WHERE issue_id IS NULL ORDER BY occurred_at, id LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []unlinkedFailure
+	for rows.Next() {
+		var (
+			u  unlinkedFailure
+			at int64
+		)
+		if err := rows.Scan(&u.projectID, &u.n.UUID, &u.n.Environment, &u.n.Release, &u.n.Notification, &u.n.Channel,
+			&u.n.Notifiable, &u.n.ErrorType, &u.n.ErrorMessage, &u.n.CorrelationID, &at); err != nil {
+			return nil, err
+		}
+		u.n.OccurredAt, u.n.Failed = fromMs(at), true
+		out = append(out, u)
+	}
+	return out, rows.Err()
 }
 
 // ---- notifications and mail: deliveries ----
@@ -123,12 +283,13 @@ type DeliveryKind struct {
 	name     string // notification / mailable
 	channel  string // channel / mailer
 	extra    string // notifiable / recipients
+	issues   bool   // failures are linked to issues (notifications only)
 }
 
 // The two delivered signals.
 var (
-	NotificationDeliveries = DeliveryKind{"app_notification_daily_counts", "app_notification_failures", "notification", "channel", "notifiable"}
-	MailDeliveries         = DeliveryKind{"app_mail_daily_counts", "app_mail_failures", "mailable", "mailer", "recipients"}
+	NotificationDeliveries = DeliveryKind{"app_notification_daily_counts", "app_notification_failures", "notification", "channel", "notifiable", true}
+	MailDeliveries         = DeliveryKind{"app_mail_daily_counts", "app_mail_failures", "mailable", "mailer", "recipients", false}
 )
 
 type delivery struct {
@@ -139,7 +300,9 @@ type delivery struct {
 	at                                time.Time
 }
 
-func ingestDelivery(ctx context.Context, tx *sql.Tx, k DeliveryKind, projectID int64, d delivery) error {
+// ingestDelivery counts a delivery and stores it if it failed. stored
+// reports whether a new failure row was written.
+func ingestDelivery(ctx context.Context, tx *sql.Tx, k DeliveryKind, projectID int64, d delivery) (stored bool, err error) {
 	at := d.at.UnixMilli()
 	sent, failed := 1, 0
 	if d.failed {
@@ -149,16 +312,20 @@ func ingestDelivery(ctx context.Context, tx *sql.Tx, k DeliveryKind, projectID i
 	cols := k.name + ", " + k.channel
 	countQuery := "INSERT INTO " + k.counts + " (day, project_id, environment, " + cols + ", sent, failed, last_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (day, project_id, environment, " + cols + ") DO UPDATE SET sent = sent + excluded.sent, failed = failed + excluded.failed, last_at = MAX(last_at, excluded.last_at)" //nolint:gosec // G202: constant identifiers
 	if _, err := tx.ExecContext(ctx, countQuery, at/dayMs, projectID, d.env, d.name, d.channel, sent, failed, at); err != nil {
-		return err
+		return false, err
 	}
 	if !d.failed {
-		return nil
+		return false, nil
 	}
 	failureQuery := "INSERT INTO " + k.failures + " (project_id, uuid, environment, release, " + cols + ", " + k.extra + ", error_type, error_message, correlation_id, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (project_id, uuid) DO NOTHING" //nolint:gosec // G202: constant identifiers
-	_, err := tx.ExecContext(ctx, failureQuery,
+	res, err := tx.ExecContext(ctx, failureQuery,
 		projectID, d.uuid, d.env, nullString(d.release), d.name, d.channel, d.extra,
 		d.errType, d.errMsg, nullString(d.correlation), at)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // TelemetryScope selects telemetry by project and environment. Zero values
@@ -169,14 +336,20 @@ type TelemetryScope struct {
 }
 
 func (sc TelemetryScope) where(column string, first int64) (string, []any) {
-	clause := ` WHERE ` + column + ` >= ?`
+	return sc.whereOn("", column, first)
+}
+
+// whereOn is where for a query that names its table: alias is prefixed
+// to every column, such as "f.".
+func (sc TelemetryScope) whereOn(alias, column string, first int64) (string, []any) {
+	clause := ` WHERE ` + alias + column + ` >= ?`
 	args := []any{first}
 	if sc.ProjectID > 0 {
-		clause += ` AND project_id = ?`
+		clause += ` AND ` + alias + `project_id = ?`
 		args = append(args, sc.ProjectID)
 	}
 	if sc.Environment != "" {
-		clause += ` AND environment = ?`
+		clause += ` AND ` + alias + `environment = ?`
 		args = append(args, sc.Environment)
 	}
 	return clause, args
@@ -282,6 +455,7 @@ func (s *Store) DeliveryStats(ctx context.Context, k DeliveryKind, sc TelemetryS
 
 // DeliveryFailure is one failed notification or mail.
 type DeliveryFailure struct {
+	UUID          string
 	ProjectID     int64
 	Environment   string
 	Release       string
@@ -292,14 +466,23 @@ type DeliveryFailure struct {
 	ErrorMessage  string
 	CorrelationID string
 	OccurredAt    time.Time
+	// IssueID and IssueStatus: the issue a failed notification belongs to;
+	// 0 and "" for mail, and for a failure not linked yet.
+	IssueID     int64
+	IssueStatus string
 }
 
 // DeliveryFailures lists the latest failures, newest first.
 func (s *Store) DeliveryFailures(ctx context.Context, k DeliveryKind, sc TelemetryScope, limit int) ([]DeliveryFailure, error) {
-	where, args := sc.where("occurred_at", 0)
+	where, args := sc.whereOn("f.", "occurred_at", 0)
 	args = append(args, limit)
-	query := `SELECT project_id, environment, COALESCE(release, ''), ` + k.name + `, ` + k.channel + `, CAST(` + k.extra + ` AS TEXT), ` + //nolint:gosec // G202: constant identifiers
-		`error_type, error_message, COALESCE(correlation_id, ''), occurred_at FROM ` + k.failures + where + ` ORDER BY occurred_at DESC, id DESC LIMIT ?`
+	issue, join := `0, ''`, ``
+	if k.issues {
+		issue, join = `COALESCE(f.issue_id, 0), COALESCE(i.status, '')`, ` LEFT JOIN issues i ON i.id = f.issue_id`
+	}
+	query := `SELECT f.uuid, f.project_id, f.environment, COALESCE(f.release, ''), f.` + k.name + `, f.` + k.channel + `, CAST(f.` + k.extra + ` AS TEXT), ` + //nolint:gosec // G202: constant identifiers
+		`f.error_type, f.error_message, COALESCE(f.correlation_id, ''), f.occurred_at, ` + issue + ` FROM ` + k.failures + ` f` + join + where +
+		` ORDER BY f.occurred_at DESC, f.id DESC LIMIT ?`
 	rows, err := s.reader.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
@@ -311,8 +494,8 @@ func (s *Store) DeliveryFailures(ctx context.Context, k DeliveryKind, sc Telemet
 			f  DeliveryFailure
 			at int64
 		)
-		if err := rows.Scan(&f.ProjectID, &f.Environment, &f.Release, &f.Name, &f.Channel, &f.Extra,
-			&f.ErrorType, &f.ErrorMessage, &f.CorrelationID, &at); err != nil {
+		if err := rows.Scan(&f.UUID, &f.ProjectID, &f.Environment, &f.Release, &f.Name, &f.Channel, &f.Extra,
+			&f.ErrorType, &f.ErrorMessage, &f.CorrelationID, &at, &f.IssueID, &f.IssueStatus); err != nil {
 			return nil, err
 		}
 		f.OccurredAt = fromMs(at)

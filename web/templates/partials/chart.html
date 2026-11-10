@@ -42,7 +42,7 @@
 
 {{define "issue_badges"}}
 {{if eq .Status "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq .Status "ignored"}}<span class="badge">Ignored</span>{{end}}
-{{if eq .Category "queue_failure"}}<span class="badge badge-queue">Queue</span>{{end}}
+{{if eq .Category "queue_failure"}}<span class="badge badge-queue">Queue</span>{{else if eq .Category "notification"}}<span class="badge badge-info">Notification</span>{{end}}
 {{end}}
 
 {{define "heatmap"}}

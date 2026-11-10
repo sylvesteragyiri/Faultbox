@@ -194,7 +194,7 @@ See the package README for queue options, manual reporting, context and `Faultbo
 | `GET /ready` | none | Readiness: the database answers and the ingestion queue has room. |
 | `POST /api/v1/events` | project API key | Report an exception or a message. Answers `202` right away; the event is stored a moment later. |
 | `POST /api/v1/queue-failures` | project API key | Report a failed queue job. |
-| `POST /api/v1/telemetry` | project API key | Report a batch of Laravel notifications, mail, artisan command runs and cache totals. A retried batch (same `batch_id`) is counted once. `POST /api/v1/notifications` is the older name for the same endpoint. |
+| `POST /api/v1/telemetry` | project API key | Report a batch of Laravel notifications, mail, artisan command runs and cache totals. A retried batch (same `batch_id`) is counted once. Each failed notification is also stored as an issue, grouped by notification class, channel and error type, so it can be opened, resolved and alerted on like an exception. `POST /api/v1/notifications` is the older name for the same endpoint. |
 | `GET /api/v1/projects/me` | project API key | Shows which project a key belongs to. |
 
 Send the key as `Authorization: Bearer fbx_…` or in the `X-Faultbox-Key` header.

@@ -85,10 +85,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	a.handler = server.New(server.Options{
 		Logger: logger,
 		API: api.New(st, logger, api.IngestOptions{
-			Queue:   a.queue,
-			Metrics: a.metrics,
-			Limiter: ingest.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
-			MaxBody: cfg.MaxEventBytes,
+			Queue:     a.queue,
+			Metrics:   a.metrics,
+			Limiter:   ingest.NewRateLimiter(cfg.RateLimit, cfg.RateBurst),
+			MaxBody:   cfg.MaxEventBytes,
+			OnResults: a.notifier.Handle,
 		}),
 		Dashboard: dash,
 		Ready: []server.ReadyCheck{

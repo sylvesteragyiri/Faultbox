@@ -177,7 +177,7 @@ func seedTelemetry(ctx context.Context, st *store.Store, rng *rand.Rand, days in
 			if err != nil {
 				return batches, items, fmt.Errorf("%s at %s: %w", p.name, hour.Format(time.RFC3339), err)
 			}
-			if _, err := st.IngestTelemetry(ctx, p.id, valid); err != nil {
+			if _, _, err := st.IngestTelemetry(ctx, p.id, valid); err != nil {
 				return batches, items, err
 			}
 			batches++

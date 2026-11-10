@@ -15,7 +15,7 @@
   <span class="insights-label">Insights</span>
   <a class="insight" href="#environments"><span class="insight-icon">{{template "icon" "layers"}}</span><span><strong>Environments</strong><small>{{len .Data.Envs}} affected{{if .Data.Envs}}: {{(index .Data.Envs 0).Name}}{{if gt (len .Data.Envs) 1}} and more{{end}}{{end}}</small></span></a>
   <a class="insight" href="#releases"><span class="insight-icon">{{template "icon" "tag"}}</span><span><strong>Releases</strong><small>{{if .Data.Releases}}{{len .Data.Releases}} affected{{else}}none reported{{end}}</small></span></a>
-  <span class="insight"><span class="insight-icon">{{template "icon" "activity"}}</span><span><strong>Type</strong><small>{{if eq $i.Category "queue_failure"}}Failed job{{else if eq $i.Category "message"}}Message{{else}}Exception{{end}}</small></span></span>
+  <span class="insight"><span class="insight-icon">{{template "icon" "activity"}}</span><span><strong>Type</strong><small>{{if eq $i.Category "queue_failure"}}Failed job{{else if eq $i.Category "notification"}}Failed notification{{else if eq $i.Category "message"}}Message{{else}}Exception{{end}}</small></span></span>
   <a class="insight" href="/issues?project={{.Data.Project.ID}}&amp;status=all"><span class="insight-icon">{{template "icon" "folder"}}</span><span><strong>Project</strong><small>{{.Data.Project.Name}}</small></span></a>
 </section>
 
@@ -55,12 +55,26 @@
   </div>
   {{if $v.IsSample}}<p class="alert alert-warn">The individual events for this issue have passed the retention period. This is the stored representative trace.</p>{{end}}
 
-  <h3>Exception</h3>
+  <h3>{{if eq $i.Category "notification"}}Error{{else}}Exception{{end}}</h3>
   <p class="exception-line"><strong class="mono">{{with $v.Event}}{{.ExceptionType}}{{else}}{{$i.ExceptionType}}{{end}}</strong></p>
   <pre class="exception-message">{{with $v.Event}}{{.Message}}{{else}}{{$i.Message}}{{end}}</pre>
 
+  {{if eq $i.Category "notification"}}
+  <h3>Notification</h3>
+  {{with $v.Notification}}
+  <table class="kv">
+    <tbody>
+      <tr><th>Notification</th><td class="mono">{{.Notification}}</td></tr>
+      <tr><th>Channel</th><td class="mono">{{.Channel}}</td></tr>
+      <tr><th>Sent to</th><td class="mono">{{.Notifiable}}</td></tr>
+    </tbody>
+  </table>
+  {{else}}<p class="muted">No notification details were stored with this event.</p>{{end}}
+  <p class="muted small">The channel reported this failure. Notifications don't carry a stack trace; use the correlation ID to find the request or job that sent it.</p>
+  {{else}}
   <h3>Stack trace</h3>
   {{template "trace" $v.Trace}}
+  {{end}}
 
   {{with $v.Request}}
   <h3>Request</h3>

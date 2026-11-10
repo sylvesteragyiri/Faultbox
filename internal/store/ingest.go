@@ -24,7 +24,7 @@ const maxIssueMessageLen = 1000
 type NewEvent struct {
 	ProjectID      int64
 	UUID           string
-	Category       string // exception, message or queue_failure
+	Category       string // exception, message, queue_failure or notification
 	Level          string
 	Environment    string
 	Release        string
@@ -43,6 +43,9 @@ type NewEvent struct {
 	SampleContext  string // JSON copied to the issue (D13)
 	OccurredAt     time.Time
 	Job            *NewQueueFailure
+	// Notification is the notification class of a failed Laravel
+	// notification; it is stored in job_name like a queue failure's job.
+	Notification string
 }
 
 // NewQueueFailure is the queue-specific part of a NewEvent.
@@ -148,8 +151,8 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 		issueMessage = issueMessage[:maxIssueMessageLen]
 	}
 	var jobName any
-	if e.Job != nil {
-		jobName = e.Job.Name
+	if name := jobNameText(e); name != "" {
+		jobName = name
 	}
 
 	var status string
@@ -309,7 +312,7 @@ func ingestOne(ctx context.Context, tx *sql.Tx, e *NewEvent, now int64) (IngestR
 
 func jobNameText(e *NewEvent) string {
 	if e.Job == nil {
-		return ""
+		return e.Notification
 	}
 	return e.Job.Name
 }

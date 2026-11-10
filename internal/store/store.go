@@ -104,7 +104,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if _, err := provider.Up(ctx); err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
-	return nil
+	return s.backfillNotificationIssues(ctx)
 }
 
 // SchemaVersion returns the highest applied migration version.

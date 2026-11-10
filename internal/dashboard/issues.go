@@ -69,7 +69,7 @@ func parseIssueForm(r *http.Request) issueForm {
 		f.Status = store.IssueUnresolved
 	}
 	switch f.Category {
-	case store.CategoryQueue, store.CategoryAll:
+	case store.CategoryQueue, store.CategoryNotification, store.CategoryAll:
 	default:
 		f.Category = store.CategoryErrors
 	}
@@ -396,6 +396,9 @@ func (h *Handler) issueShow(w http.ResponseWriter, r *http.Request) {
 		Context  string
 		Job      string
 		IsSample bool
+		// Notification is set for failed Laravel notifications, which have
+		// no stack trace or request.
+		Notification *notificationView
 	}
 	switch {
 	case err == nil:
@@ -420,6 +423,14 @@ func (h *Handler) issueShow(w http.ResponseWriter, r *http.Request) {
 	}
 	if job, ok := sample["job"]; ok {
 		view.Job = prettyJSON(string(job))
+	}
+	if is.Category == store.CategoryNotification {
+		raw := string(sample["notification"])
+		if view.Event != nil {
+			raw = view.Event.EventContext
+		}
+		view.Notification = parseNotificationView(raw)
+		view.Context = "" // the same details, shown as a table instead
 	}
 
 	var failures []store.QueueFailure
@@ -526,4 +537,20 @@ func (h *Handler) renderIssueCard(w http.ResponseWriter, r *http.Request, id int
 	h.renderPartial(w, "issues", "issue_card", map[string]any{
 		"Row": row, "CSRF": csrfFrom(ctx), "Next": r.PostFormValue("next"),
 	})
+}
+
+// notificationView is what a failed Laravel notification event says about
+// the notification.
+type notificationView struct {
+	Notification string `json:"notification"`
+	Channel      string `json:"channel"`
+	Notifiable   string `json:"notifiable"`
+}
+
+func parseNotificationView(raw string) *notificationView {
+	var v notificationView
+	if raw == "" || json.Unmarshal([]byte(raw), &v) != nil || v.Notification == "" {
+		return nil
+	}
+	return &v
 }

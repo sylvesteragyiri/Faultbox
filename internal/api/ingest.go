@@ -24,6 +24,10 @@ type IngestOptions struct {
 	MaxBody int64
 	// Now is the clock used for timestamp validation. Defaults to time.Now.
 	Now func() time.Time
+	// OnResults receives the issue events a telemetry batch stored (failed
+	// notifications), so they raise alerts like any other event. It must
+	// not block.
+	OnResults ingest.ResultHook
 }
 
 // AcceptedResponse is the 202 body. Duplicates get the same answer (D11).

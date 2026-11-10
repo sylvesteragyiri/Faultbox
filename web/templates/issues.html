@@ -31,6 +31,7 @@
       <select name="category">
         <option value="errors" {{if eq $f.Category "errors"}}selected{{end}}>Errors</option>
         <option value="queue_failure" {{if eq $f.Category "queue_failure"}}selected{{end}}>Failed jobs</option>
+        <option value="notification" {{if eq $f.Category "notification"}}selected{{end}}>Failed notifications</option>
         <option value="all" {{if eq $f.Category "all"}}selected{{end}}>All kinds</option>
       </select>
     </label>
@@ -133,7 +134,7 @@
     </div>
     <div class="row tools">
       {{if eq $r.Status "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq $r.Status "ignored"}}<span class="badge">Ignored</span>{{end}}
-      {{if eq $r.Category "queue_failure"}}<span class="badge badge-queue">Job</span>{{end}}
+      {{if eq $r.Category "queue_failure"}}<span class="badge badge-queue">Job</span>{{else if eq $r.Category "notification"}}<span class="badge badge-info">Notification</span>{{end}}
       <a class="tool" href="/issues/{{$r.ID}}"><span>Open</span>{{template "icon" "arrow"}}</a>
     </div>
   </header>
@@ -149,7 +150,7 @@
         <div><dt>Events</dt><dd><strong>{{compact $r.OccurrenceCount}}</strong></dd></div>
         <div><dt>Project</dt><dd class="truncate">{{$r.ProjectName}}</dd></div>
         <div><dt>Last seen</dt><dd><time datetime="{{isoTime $r.LastSeenAt}}" title="{{datetime $r.LastSeenAt}}">{{timeago $r.LastSeenAt}}</time></dd></div>
-        <div><dt>Type</dt><dd>{{if eq $r.Category "queue_failure"}}Job{{else if eq $r.Category "message"}}Message{{else}}Exception{{end}}</dd></div>
+        <div><dt>Type</dt><dd>{{if eq $r.Category "queue_failure"}}Job{{else if eq $r.Category "notification"}}Notification{{else if eq $r.Category "message"}}Message{{else}}Exception{{end}}</dd></div>
         <div><dt>First seen</dt><dd><time datetime="{{isoTime $r.FirstSeenAt}}" title="{{datetime $r.FirstSeenAt}}">{{timeago $r.FirstSeenAt}}</time></dd></div>
         <div><dt>Release</dt><dd class="mono truncate">{{if $r.LastRelease}}{{$r.LastRelease}}{{else}}<span class="muted">—</span>{{end}}</dd></div>
       </dl>
