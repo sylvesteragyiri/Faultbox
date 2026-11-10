@@ -577,11 +577,15 @@ fieldset > legend { font-weight: 600; font-size: .84rem; padding: 0 .35rem; }
 .main > .alert { margin-bottom: 0; }
 
 /* ---- login ---- */
-.login { width: 100%; max-width: 400px; padding: 2.25rem 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+.login { width: 100%; max-width: 400px; padding: 2.25rem 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); animation: login-enter .48s var(--ease) both; }
 .login-title { display: flex; align-items: center; gap: .65rem; justify-content: center; margin-bottom: .35rem; font-size: 1.45rem; }
-.login-title img { border-radius: 8px; box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 70%, transparent); }
+.login-mark { position: relative; isolation: isolate; display: grid; place-items: center; width: 32px; height: 32px; flex: none; }
+.login-mark::before { content: ""; position: absolute; z-index: 0; inset: 0; border: 1px solid color-mix(in srgb, var(--accent) 48%, transparent); border-radius: 11px; opacity: 0; animation: login-mark-pulse 3.2s ease-out 0.55s infinite; }
+.login-mark img { position: relative; z-index: 1; display: block; border-radius: 9px; box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 70%, transparent); }
 .login-sub { text-align: center; color: var(--muted); margin-bottom: 1.75rem; font-size: .88rem; }
 .login .btn-primary { width: 100%; height: 40px; margin-top: .25rem; }
+@keyframes login-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes login-mark-pulse { 0% { opacity: 0; transform: scale(.92); } 18% { opacity: .55; } 100% { opacity: 0; transform: scale(1.65); } }
 
 /* ---- issue lists ---- */
 
