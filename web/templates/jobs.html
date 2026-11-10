@@ -1,0 +1,11 @@
+{{define "content"}}
+<header class="page-head"><div><h1>Jobs</h1><p class="page-sub">Successful and failed queue job runs across your projects.</p></div></header>
+<section class="stats job-run-stats" aria-label="Job run summary">
+  <div class="stat card"><span class="stat-label">Total runs</span><span class="stat-value muted">—</span><span class="stat-note">Waiting for job run telemetry</span></div>
+  <div class="stat card"><span class="stat-label">Succeeded</span><span class="stat-value muted">—</span><span class="stat-note">Successful jobs will appear here</span></div>
+  <div class="stat card"><span class="stat-label">Failed</span><span class="stat-value muted">—</span><span class="stat-note">New run history is not available yet</span></div>
+</section>
+<section class="card job-run-placeholder">
+  <div class="empty-state"><span class="empty-mark">{{template "icon" "queue"}}</span><h2>No job run data yet</h2><p>Run history, duration, attempts and successful jobs will appear after M10 telemetry is enabled.</p><a class="btn btn-sm" href="/queue-failures">View existing failed jobs</a></div>
+</section>
+{{end}}

@@ -115,4 +115,16 @@
     var msg = e.target.getAttribute("data-confirm");
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
+
+  // Issue bulk actions use associated checkboxes so the table can remain
+  // semantic and the action bar can stay above the horizontally scrollable table.
+  document.addEventListener("change", function (e) {
+    var master = e.target.closest && e.target.closest("[data-select-all]");
+    if (!master) return;
+    var form = document.getElementById(master.getAttribute("data-select-all"));
+    if (!form) return;
+    document.querySelectorAll('input[type="checkbox"][form="' + CSS.escape(form.id) + '"][name="id"]').forEach(function (box) {
+      box.checked = master.checked;
+    });
+  });
 })();

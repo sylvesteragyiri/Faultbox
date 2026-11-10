@@ -43,7 +43,7 @@ func TestScopeSwitcherScopesTheDashboard(t *testing.T) {
 
 	// The switcher sits at the top left of every dashboard page.
 	home := a.Get("/").Body
-	if !contains(home, `class="scope-switcher"`) || !contains(home, "All projects") || !contains(home, ">Shop</option>") {
+	if !contains(home, `class="scope-switcher scope-menu"`) || !contains(home, "All projects") || !contains(home, ">Shop</option>") {
 		t.Fatal("the overview should show the project switcher")
 	}
 

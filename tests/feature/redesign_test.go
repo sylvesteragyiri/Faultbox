@@ -1,9 +1,7 @@
 package feature
 
 import (
-	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -37,45 +35,38 @@ func TestOverviewProjectCardsHeatmapAndRange(t *testing.T) {
 	}
 }
 
-var cardStatusRe = regexp.MustCompile(`hx-post="(/issues/(\d+)/status)" hx-target="#issue-card-(\d+)"`)
-
-func TestIssueCardQuickActions(t *testing.T) {
+func TestIssueTableBulkActionsAndAssignment(t *testing.T) {
 	t.Parallel()
 	a := appWithIssues(t)
+	id := issueIDFor(t, a, "ModelNotFoundException")
 	list := a.Get("/issues?sort=count")
-	m := cardStatusRe.FindStringSubmatch(list.Body)
-	if m == nil || m[2] != m[3] {
-		t.Fatal("issue cards should post status changes to their own card")
-	}
-	path, id := m[1], m[2]
-
-	// HTMX: the card re-renders itself, now resolved.
-	form := url.Values{"status": {"resolved"}, "csrf_token": {a.CSRF("/issues")}, "next": {"/issues?sort=count"}}
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, a.Server.URL+path, strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("HX-Request", "true")
-	req.Header.Set("HX-Target", "issue-card-"+id)
-	resp := testutil.Do(t, a.Client, req)
-	card := strings.TrimSpace(resp.Body)
-	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(card, `<article class="issue-card" id="issue-card-`+id+`"`) ||
-		!contains(card, "Resolved") || !contains(card, "Reopen") || contains(card, "<html") {
-		t.Fatalf("card after resolving: %d %.200s", resp.StatusCode, card)
-	}
-	if strings.Count(card, `class="spark"`) != 1 {
-		t.Error("the re-rendered card keeps its sparkline")
-	}
-
-	// Plain form: back to the same filtered list.
-	plain := a.PostForm(path, url.Values{"status": {"unresolved"}, "next": {"/issues?sort=count&q=x"}}, a.CSRF("/issues"))
-	if plain.Request.URL.Path != "/issues" || plain.Request.URL.Query().Get("sort") != "count" {
-		t.Fatalf("plain form returned to %s", plain.Request.URL)
-	}
-	// Anything that isn't the local list falls back to the issue page.
-	for _, next := range []string{"https://evil.example/issues", "//evil.example/issues", "/issues/../admin", "/projects"} {
-		got := a.PostForm(path, url.Values{"status": {"unresolved"}, "next": {next}}, a.CSRF("/issues"))
-		if got.Request.URL.Path != "/issues/"+id || got.Request.URL.Host != strings.TrimPrefix(a.Server.URL, "http://") {
-			t.Errorf("next=%q: ended at %s", next, got.Request.URL)
+	for _, want := range []string{`class="data-table issue-table"`, `data-select-all="issue-bulk"`, "Assign to me", "First seen", "Last seen"} {
+		if !contains(list.Body, want) {
+			t.Errorf("compact issues table is missing %q", want)
 		}
+	}
+	if !contains(list.Body, `data-issue-tooltip=`) || !contains(list.Body, `title="`) {
+		t.Error("issue message should be available before opening the issue")
+	}
+	if !contains(a.Get("/issues?assigned=unassigned").Body, `value="`+id+`"`) {
+		t.Fatal("unassigned issue does not appear in Unassigned")
+	}
+
+	assigned := a.PostForm("/issues/"+id+"/assign", url.Values{"assigned": {"me"}, "next": {"/issues"}}, a.CSRF("/issues"))
+	if assigned.Request.URL.Path != "/issues" {
+		t.Fatalf("assignment returned to %s", assigned.Request.URL)
+	}
+	mine := a.Get("/issues?assigned=mine")
+	if !contains(mine.Body, `value="`+id+`"`) {
+		t.Fatal("assigned issue does not appear in Mine")
+	}
+
+	resolved := a.PostForm("/issues/bulk", url.Values{"id": {id}, "operation": {"resolved"}, "next": {"/issues?assigned=mine"}}, a.CSRF("/issues"))
+	if resolved.Request.URL.Path != "/issues" || resolved.Request.URL.Query().Get("assigned") != "mine" {
+		t.Fatalf("bulk action returned to %s", resolved.Request.URL)
+	}
+	if !contains(a.Get("/issues?status=resolved&assigned=mine").Body, `value="`+id+`"`) {
+		t.Fatal("bulk resolve did not update the selected issue")
 	}
 }
 
@@ -109,4 +100,40 @@ func TestThemeSwitchOnEveryPage(t *testing.T) {
 	check("login", a.Get("/login").Body)
 	a.LoginAdmin()
 	check("overview", a.Get("/").Body)
+}
+
+func TestV2SidebarShowsScopeAndGroupedMenus(t *testing.T) {
+	t.Parallel()
+	a := testutil.NewApp(t)
+	a.LoginAdmin()
+	body := a.Get("/").Body
+	for _, want := range []string{
+		`class="scope-switcher scope-menu"`, "All projects", "All environments",
+		`aria-label="Main"`, ">Activity</p>", `aria-label="Manage"`, "Dashboard", "Issues", "Commands", "Settings",
+	} {
+		if !contains(body, want) {
+			t.Errorf("v2 sidebar is missing %q", want)
+		}
+	}
+	if contains(body, `class="topbar"`) || contains(body, `id="global-search"`) {
+		t.Error("the global topbar and search should be removed")
+	}
+}
+
+func TestV2InsightPagesShowHonestEmptyStates(t *testing.T) {
+	t.Parallel()
+	a := testutil.NewApp(t)
+	a.LoginAdmin()
+	requests := a.Get("/requests")
+	for _, want := range []string{"Requests", "0 Routes", "No request telemetry yet", "No duration data yet", "No routes found"} {
+		if !contains(requests.Body, want) {
+			t.Errorf("Requests page is missing %q", want)
+		}
+	}
+	jobs := a.Get("/jobs")
+	for _, want := range []string{"Jobs", "No job run data yet", "successful jobs", "/queue-failures"} {
+		if !contains(jobs.Body, want) {
+			t.Errorf("Jobs page is missing %q", want)
+		}
+	}
 }

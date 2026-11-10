@@ -33,6 +33,8 @@ const MaxIssuePage = 400
 // IssueFilter selects issues for the list view. Zero values mean "any".
 type IssueFilter struct {
 	ProjectID     int64
+	AssigneeID    int64
+	Unassigned    bool
 	Status        string // unresolved, resolved, ignored, or "" for all
 	Category      string // errors, queue_failure, notification, all ("" = errors)
 	Environment   string
@@ -50,6 +52,8 @@ type IssueFilter struct {
 type IssueSummary struct {
 	ID              int64
 	ProjectID       int64
+	AssignedUserID  int64
+	AssignedEmail   string
 	Fingerprint     string
 	Category        string
 	Level           string
@@ -114,6 +118,11 @@ func issueQuery(f IssueFilter) (string, []any) {
 
 	if f.ProjectID > 0 {
 		add("i.project_id = ?", f.ProjectID)
+	}
+	if f.AssigneeID > 0 {
+		add("i.assigned_user_id = ?", f.AssigneeID)
+	} else if f.Unassigned {
+		add("i.assigned_user_id IS NULL")
 	}
 	if f.Status != "" {
 		add("i.status = ?", f.Status)
@@ -207,7 +216,8 @@ func escapeLike(s string) string {
 }
 
 const summaryColumns = `i.id, i.project_id, i.fingerprint, i.category, i.level, i.exception_type, i.message, i.culprit,
-	COALESCE(i.job_name, ''), i.status, i.occurrence_count, i.first_seen_at, i.last_seen_at, COALESCE(i.last_release, '')`
+	COALESCE(i.job_name, ''), i.status, i.occurrence_count, i.first_seen_at, i.last_seen_at, COALESCE(i.last_release, ''), COALESCE(i.assigned_user_id, 0),
+	COALESCE((SELECT email FROM users WHERE users.id = i.assigned_user_id), '')`
 
 // ListIssues returns one page of issues matching the filter.
 func (s *Store) ListIssues(ctx context.Context, f IssueFilter) (IssuePage, error) {
@@ -229,7 +239,7 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) (IssuePage, error
 			first, last int64
 		)
 		if err := rows.Scan(&is.ID, &is.ProjectID, &is.Fingerprint, &is.Category, &is.Level, &is.ExceptionType,
-			&is.Message, &is.Culprit, &is.JobName, &is.Status, &is.OccurrenceCount, &first, &last, &is.LastRelease); err != nil {
+			&is.Message, &is.Culprit, &is.JobName, &is.Status, &is.OccurrenceCount, &first, &last, &is.LastRelease, &is.AssignedUserID, &is.AssignedEmail); err != nil {
 			return IssuePage{}, err
 		}
 		is.FirstSeenAt, is.LastSeenAt = fromMs(first), fromMs(last)

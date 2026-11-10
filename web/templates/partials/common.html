@@ -23,23 +23,27 @@
 </div>{{end}}
 
 {{define "scope_switcher"}}{{$s := .Scope}}
-<form class="scope-switcher" method="post" action="/scope" hx-post="/scope" hx-trigger="change" hx-swap="none" aria-label="Project and environment">
-  {{template "csrf" .CSRF}}<input type="hidden" name="next" value="{{$s.Next}}">
-  <label class="scope-project">
+<details class="scope-switcher scope-menu">
+  <summary aria-label="Select project and environment">
     <span class="scope-mark" aria-hidden="true">{{template "icon" "folder"}}</span>
-    <span class="sr-only">Project</span>
-    <select name="project">
-      <option value="">All projects</option>
-      {{range $s.Projects}}<option value="{{.ID}}" {{if eq $s.ProjectID .ID}}selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-  </label>
-  <label class="scope-env{{if $s.Env}} is-set{{end}}">
-    <span class="sr-only">Environment</span>
-    <select name="env">
-      <option value="">All environments</option>
-      {{range $s.Envs}}<option {{if eq $s.Env .}}selected{{end}}>{{.}}</option>{{end}}
-    </select>
-  </label>
-  <noscript><button class="btn btn-sm" type="submit">Switch</button></noscript>
-</form>
+    <span class="scope-copy"><strong class="truncate">{{$s.CurrentProject}}</strong><small class="truncate">{{if $s.Env}}{{$s.Env}}{{else}}All environments{{end}}</small></span>
+    <span class="scope-chevron" aria-hidden="true">⌄</span>
+  </summary>
+  <form class="scope-panel" method="post" action="/scope" hx-post="/scope" hx-trigger="change" hx-swap="none" aria-label="Project and environment">
+    {{template "csrf" .CSRF}}<input type="hidden" name="next" value="{{$s.Next}}">
+    <label>Project
+      <select name="project">
+        <option value="">All projects</option>
+        {{range $s.Projects}}<option value="{{.ID}}" {{if eq $s.ProjectID .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label>Environment
+      <select name="env">
+        <option value="">All environments</option>
+        {{range $s.Envs}}<option {{if eq $s.Env .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
+  </form>
+</details>
 {{end}}

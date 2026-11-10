@@ -31,9 +31,11 @@ func (s Scope) Project() string {
 // scopeView is what the switcher renders.
 type scopeView struct {
 	Scope
-	Projects []store.Project
-	Envs     []string
-	Next     string // the current page, to return to after switching
+	Projects       []store.Project
+	Envs           []string
+	CurrentProject string
+	OpenIssues     int64
+	Next           string // the current page, to return to after switching
 }
 
 const scopeCookie = "fb_scope"
@@ -67,10 +69,12 @@ func (h *Handler) scopeView(r *http.Request) scopeView {
 		return v
 	}
 	v.Projects = projects
+	v.CurrentProject = "All projects"
 	found := v.ProjectID == 0
 	for _, p := range projects {
 		if p.ID == v.ProjectID {
 			found = true
+			v.CurrentProject = p.Name
 		}
 	}
 	if !found {
@@ -82,6 +86,12 @@ func (h *Handler) scopeView(r *http.Request) scopeView {
 		return v
 	}
 	v.Envs = envs
+	openIssues, err := h.store.CountOpenIssues(r.Context(), v.ProjectID, v.Env)
+	if err == nil {
+		v.OpenIssues = openIssues
+	} else {
+		h.logger.Error("load issue count for navigation", "error", err)
+	}
 	if v.Env != "" && !slices.Contains(v.Envs, v.Env) {
 		v.Envs = append(v.Envs, v.Env) // keep the current choice visible
 	}

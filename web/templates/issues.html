@@ -1,77 +1,47 @@
 {{define "content"}}
 {{$f := .Data.Form}}
-<header class="page-head"><div><h1>Issues</h1><p class="page-sub">Exceptions grouped by type, message and stack trace.</p></div></header>
+<header class="page-head"><div><h1>Issues</h1><p class="page-sub">Grouped exceptions and failures from your projects.</p></div></header>
 
-<form class="filter-bar" method="get" action="/issues" role="search"
-      hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true"
-      hx-trigger="change, input changed delay:300ms from:find input[name=q], submit">
-  <div class="filter-row">
-    <label class="search-field">
-      {{template "icon" "search"}}
-      <span class="sr-only">Search issues</span>
-      <input type="search" name="q" value="{{$f.Q}}" placeholder="Search issues" autocomplete="off">
-    </label>
-    <fieldset class="seg seg-radio">
-      <legend class="sr-only">Sort by</legend>
-      <label><input type="radio" name="sort" value="last_seen" {{if eq $f.Sort "last_seen"}}checked{{end}}><span>Recent</span></label>
-      <label><input type="radio" name="sort" value="count" {{if eq $f.Sort "count"}}checked{{end}}><span>Frequent</span></label>
-      <label><input type="radio" name="sort" value="first_seen" {{if eq $f.Sort "first_seen"}}checked{{end}}><span>New</span></label>
-    </fieldset>
-  </div>
-  <div class="pill-row">
-    <label class="pill{{if ne $f.Status "unresolved"}} is-set{{end}}"><span class="sr-only">Status</span>
-      <select name="status">
-        <option value="unresolved" {{if eq $f.Status "unresolved"}}selected{{end}}>Unresolved</option>
-        <option value="resolved" {{if eq $f.Status "resolved"}}selected{{end}}>Resolved</option>
-        <option value="ignored" {{if eq $f.Status "ignored"}}selected{{end}}>Ignored</option>
-        <option value="all" {{if eq $f.Status "all"}}selected{{end}}>All statuses</option>
-      </select>
-    </label>
-    <label class="pill{{if ne $f.Category "errors"}} is-set{{end}}"><span class="sr-only">Kind</span>
-      <select name="category">
-        <option value="errors" {{if eq $f.Category "errors"}}selected{{end}}>Errors</option>
-        <option value="queue_failure" {{if eq $f.Category "queue_failure"}}selected{{end}}>Failed jobs</option>
-        <option value="notification" {{if eq $f.Category "notification"}}selected{{end}}>Failed notifications</option>
-        <option value="all" {{if eq $f.Category "all"}}selected{{end}}>All kinds</option>
-      </select>
-    </label>
-    <label class="pill{{if $f.ProjectSet}} is-set{{end}}"><span class="sr-only">Project</span>
-      <select name="project">
-        <option value="">All projects</option>
-        {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
-      </select>
-    </label>
-    <label class="pill{{if $f.EnvSet}} is-set{{end}}"><span class="sr-only">Environment</span>
-      <select name="env">
-        <option value="">Any environment</option>
-        {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
-      </select>
-    </label>
-    <label class="pill{{if $f.Release}} is-set{{end}}"><span class="sr-only">Release</span>
-      <select name="release">
-        <option value="">Any release</option>
-        {{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}
-      </select>
-    </label>
-    <label class="pill{{if $f.Type}} is-set{{end}}"><span class="sr-only">Exception</span>
-      <select name="type">
-        <option value="">Any exception</option>
-        {{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{classShort .}}</option>{{end}}
-      </select>
-    </label>
-    <label class="pill{{if $f.Range}} is-set{{end}}"><span class="sr-only">Seen</span>
-      <select name="range">
-        <option value="" {{if eq $f.Range ""}}selected{{end}}>Any time</option>
-        <option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>Last 24 hours</option>
-        <option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>Last 7 days</option>
-        <option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>Last 30 days</option>
-        <option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>Last 90 days</option>
-      </select>
-    </label>
-    {{if $f.Filtered}}<a class="pill-clear" href="/issues">Clear filters</a>{{end}}
-    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
-  </div>
-</form>
+<nav class="issue-tabs" aria-label="Issue type">
+  <a href="{{$f.CategoryURL "errors"}}" {{if eq $f.Category "errors"}}aria-current="page"{{end}}>Exceptions</a>
+  <a href="{{$f.CategoryURL "queue_failure"}}" {{if eq $f.Category "queue_failure"}}aria-current="page"{{end}}>Failed jobs</a>
+  <a href="{{$f.CategoryURL "notification"}}" {{if eq $f.Category "notification"}}aria-current="page"{{end}}>Notifications</a>
+  <a href="{{$f.CategoryURL "all"}}" {{if eq $f.Category "all"}}aria-current="page"{{end}}>All</a>
+</nav>
+
+<div class="issue-controls">
+  <form class="issue-search" method="get" action="/issues" role="search" hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, input changed delay:300ms from:find input[name=q]">
+    <label class="search-field"><span class="sr-only">Search issues</span>{{template "icon" "search"}}<input type="search" name="q" value="{{$f.Q}}" placeholder="Search issues" autocomplete="off" data-hotkey="/"></label>
+    <input type="hidden" name="status" value="{{$f.Status}}"><input type="hidden" name="category" value="{{$f.Category}}"><input type="hidden" name="assigned" value="{{$f.Assigned}}"><input type="hidden" name="release" value="{{$f.Release}}"><input type="hidden" name="type" value="{{$f.Type}}"><input type="hidden" name="range" value="{{$f.Range}}"><input type="hidden" name="sort" value="{{$f.Sort}}">
+    {{if $f.ProjectSet}}<input type="hidden" name="project" value="{{$f.Project}}">{{end}}{{if $f.EnvSet}}<input type="hidden" name="env" value="{{$f.Env}}">{{end}}
+    <button class="btn btn-sm" type="submit">Search</button>
+  </form>
+  <nav class="issue-status-tabs" aria-label="Issue status">
+    <a href="{{$f.StatusURL "unresolved"}}" {{if and (eq $f.Status "unresolved") (eq $f.Assigned "")}}aria-current="page"{{end}}>Open</a>
+    <a href="{{$f.AssignedURL "unassigned"}}" {{if eq $f.Assigned "unassigned"}}aria-current="page"{{end}}>Unassigned</a>
+    <a href="{{$f.AssignedURL "mine"}}" {{if eq $f.Assigned "mine"}}aria-current="page"{{end}}>Mine</a>
+    <a href="{{$f.StatusURL "resolved"}}" {{if eq $f.Status "resolved"}}aria-current="page"{{end}}>Resolved</a>
+    <a href="{{$f.StatusURL "ignored"}}" {{if eq $f.Status "ignored"}}aria-current="page"{{end}}>Ignored</a>
+    <a href="{{$f.StatusURL "all"}}" {{if and (eq $f.Status "all") (eq $f.Assigned "")}}aria-current="page"{{end}}>All status</a>
+  </nav>
+</div>
+
+<details class="advanced-filters" {{if or $f.ProjectSet $f.EnvSet $f.Release $f.Type $f.Range}}open{{end}}>
+  <summary>Filters{{if $f.Filtered}} <span class="filter-active">Active</span>{{end}}</summary>
+  <form class="filter-bar" method="get" action="/issues" hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change, submit">
+    <input type="hidden" name="q" value="{{$f.Q}}"><input type="hidden" name="status" value="{{$f.Status}}"><input type="hidden" name="category" value="{{$f.Category}}"><input type="hidden" name="assigned" value="{{$f.Assigned}}">
+    <div class="pill-row">
+      <label class="pill"><span class="sr-only">Project</span><select name="project"><option value="">All projects</option>{{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label class="pill"><span class="sr-only">Environment</span><select name="env"><option value="">Any environment</option>{{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      <label class="pill"><span class="sr-only">Release</span><select name="release"><option value="">Any release</option>{{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      <label class="pill"><span class="sr-only">Exception type</span><select name="type"><option value="">Any type</option>{{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{classShort .}}</option>{{end}}</select></label>
+      <label class="pill"><span class="sr-only">Time range</span><select name="range"><option value="">Any time</option><option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>24 hours</option><option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>7 days</option><option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>30 days</option><option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>90 days</option></select></label>
+      <label class="pill"><span class="sr-only">Sort</span><select name="sort"><option value="last_seen" {{if eq $f.Sort "last_seen"}}selected{{end}}>Most recent</option><option value="count" {{if eq $f.Sort "count"}}selected{{end}}>Most frequent</option><option value="first_seen" {{if eq $f.Sort "first_seen"}}selected{{end}}>First seen</option></select></label>
+      {{if $f.Filtered}}<a class="pill-clear" href="/issues">Clear filters</a>{{end}}
+      <noscript><button class="btn btn-sm" type="submit">Apply filters</button></noscript>
+    </div>
+  </form>
+</details>
 
 {{template "issue_results" .}}
 {{end}}
@@ -80,81 +50,54 @@
 {{$f := .Data.Form}}
 <section id="issue-results" class="issue-results" aria-live="polite">
   {{if .Data.Rows}}
-  <div class="results-bar">
-    <span class="muted small">Showing <strong>{{.Data.First}}–{{.Data.Last}}</strong>{{if .Data.Page.HasNext}} and more{{end}}</span>
-  </div>
-  <div class="issue-list">
-    {{range .Data.Rows}}{{template "issue_card" (dict "Row" . "CSRF" $.CSRF "Next" $f.ListURL)}}{{end}}
+  <div class="results-bar"><span class="muted small">Showing <strong>{{.Data.First}}-{{.Data.Last}}</strong>{{if .Data.Page.HasNext}} and more{{end}}</span></div>
+  <form id="issue-bulk" class="bulk-bar" method="post" action="/issues/bulk" data-confirm="Apply this action to the selected issues?">
+    {{template "csrf" .CSRF}}<input type="hidden" name="next" value="{{$f.ListURL}}">
+    <span class="muted small">Select issues to apply an action</span>
+    <button class="btn btn-sm" name="operation" value="resolved" type="submit">Resolve</button>
+    <button class="btn btn-sm" name="operation" value="ignored" type="submit">Ignore</button>
+    <button class="btn btn-sm btn-ghost" name="operation" value="assign_me" type="submit">Assign to me</button>
+    <button class="btn btn-sm btn-ghost" name="operation" value="unassign" type="submit">Unassign</button>
+  </form>
+  <div class="table-wrap issue-table-wrap">
+    <table class="data-table issue-table">
+      <thead><tr>
+        <th class="check-col"><input type="checkbox" data-select-all="issue-bulk" aria-label="Select all issues on this page"></th>
+        <th>ID</th><th class="trend-col" aria-label="Trend"></th>
+        <th><a href="{{$f.SortURL "last_seen"}}" {{if eq $f.Sort "last_seen"}}aria-current="true"{{end}}>Issue{{if eq $f.Sort "last_seen"}} <span aria-hidden="true">↓</span>{{end}}</a></th>
+        <th class="num"><a href="{{$f.SortURL "count"}}" {{if eq $f.Sort "count"}}aria-current="true"{{end}}>Count{{if eq $f.Sort "count"}} <span aria-hidden="true">↓</span>{{end}}</a></th>
+        <th><a href="{{$f.SortURL "first_seen"}}" {{if eq $f.Sort "first_seen"}}aria-current="true"{{end}}>First seen{{if eq $f.Sort "first_seen"}} <span aria-hidden="true">↓</span>{{end}}</a></th>
+        <th>Last seen</th><th>Assigned</th><th class="open-col"><span class="sr-only">Open</span></th>
+      </tr></thead>
+      <tbody>
+      {{range .Data.Rows}}{{$r := .}}
+        <tr class="issue-row">
+          <td class="check-col"><input type="checkbox" name="id" value="{{$r.ID}}" form="issue-bulk" aria-label="Select issue {{$r.ID}}"></td>
+          <td class="mono issue-id">{{$r.ID}}</td>
+          <td class="trend-col"><svg class="spark" viewBox="0 0 100 20" preserveAspectRatio="none" role="img" aria-label="Events per day over the last 14 days">{{range $r.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="1"{{if .Peak}} class="peak"{{end}}></rect>{{end}}</svg></td>
+          <td class="issue-message-cell" data-issue-tooltip="{{$r.Message}}">
+            <a class="issue-name" href="/issues/{{$r.ID}}" title="{{$r.Message}}" aria-label="{{if $r.JobName}}{{$r.JobName}}{{else}}{{$r.ExceptionType}}{{end}}: {{$r.Message}}">{{if $r.JobName}}{{$r.JobName}}{{else}}{{$r.ExceptionType}}{{end}}</a>
+            <p class="issue-summary mono">{{truncate $r.Message 180}}</p>
+            <span class="sr-only">{{$r.Culprit}}</span>
+          </td>
+          <td class="num mono">{{compact $r.OccurrenceCount}}</td>
+          <td><time class="mono muted" datetime="{{isoTime $r.FirstSeenAt}}" title="{{datetime $r.FirstSeenAt}}">{{timeago $r.FirstSeenAt}}</time></td>
+          <td><time class="mono muted" datetime="{{isoTime $r.LastSeenAt}}" title="{{datetime $r.LastSeenAt}}">{{timeago $r.LastSeenAt}}</time></td>
+          <td class="assignee-cell">
+            {{if eq $r.AssignedUserID 0}}<span class="muted">Unassigned</span>{{else if eq $r.AssignedUserID $.Data.CurrentUserID}}<span>You</span>{{else}}<span title="{{$r.AssignedEmail}}">{{if $r.AssignedEmail}}{{$r.AssignedEmail}}{{else}}Assigned{{end}}</span>{{end}}
+            {{if or (eq $r.AssignedUserID 0) (eq $r.AssignedUserID $.Data.CurrentUserID)}}<form method="post" action="/issues/{{$r.ID}}/assign">{{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$f.ListURL}}"><input type="hidden" name="assigned" value="{{if eq $r.AssignedUserID 0}}me{{else}}none{{end}}"><button class="assign-btn" type="submit">{{if eq $r.AssignedUserID 0}}Assign{{else}}Unassign{{end}}</button></form>{{end}}
+          </td>
+          <td class="open-col"><a class="row-open" href="/issues/{{$r.ID}}" aria-label="Open issue {{$r.ID}}">{{template "icon" "external"}}</a></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
   </div>
   {{if or (gt .Data.Page.Page 1) .Data.Page.HasNext}}
-  <nav class="pager card" aria-label="Pages">
-    <span class="muted small">{{.Data.First}}–{{.Data.Last}}</span>
-    <span class="row">
-      {{if gt .Data.Page.Page 1}}<a class="btn" href="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Previous</a>{{end}}
-      {{if .Data.Page.HasNext}}<a class="btn" href="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true">Next</a>{{end}}
-    </span>
-  </nav>
+  <nav class="pager card" aria-label="Pages"><span class="muted small">{{.Data.First}}-{{.Data.Last}}</span><span class="row">{{if gt .Data.Page.Page 1}}<a class="btn" href="{{$f.PageURL (sub .Data.Page.Page 1)}}">Previous</a>{{end}}{{if .Data.Page.HasNext}}<a class="btn" href="{{$f.PageURL (add .Data.Page.Page 1)}}">Next</a>{{end}}</span></nav>
   {{end}}
   {{else}}
-  <div class="card empty">
-    {{if $f.Filtered}}
-      <h2>No matching issues</h2>
-      <p class="muted">Nothing matches these filters. <a href="/issues">Clear filters</a></p>
-    {{else}}
-      <h2>No unresolved issues</h2>
-      <p class="muted">New errors from your Laravel apps appear here as they arrive.</p>
-    {{end}}
-  </div>
+  <div class="empty-state"><span class="empty-mark">{{template "icon" "issues"}}</span><h2>{{if $f.Filtered}}No matching issues{{else}}No open issues{{end}}</h2><p>No data found - try adjusting the filters or time range.</p>{{if $f.Filtered}}<a href="/issues">Clear filters</a>{{end}}</div>
   {{end}}
 </section>
-{{end}}
-
-{{define "issue_card"}}
-{{$r := .Row}}
-<article class="issue-card" id="issue-card-{{$r.ID}}">
-  <header class="issue-card-bar">
-    <div class="row tools">
-      {{if ne $r.Status "resolved"}}
-      <form method="post" action="/issues/{{$r.ID}}/status" hx-post="/issues/{{$r.ID}}/status" hx-target="#issue-card-{{$r.ID}}" hx-swap="outerHTML">
-        {{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$.Next}}"><input type="hidden" name="status" value="resolved">
-        <button class="tool" type="submit">{{template "icon" "check"}}<span>Resolve</span></button>
-      </form>
-      {{end}}
-      {{if eq $r.Status "unresolved"}}
-      <form method="post" action="/issues/{{$r.ID}}/status" hx-post="/issues/{{$r.ID}}/status" hx-target="#issue-card-{{$r.ID}}" hx-swap="outerHTML">
-        {{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$.Next}}"><input type="hidden" name="status" value="ignored">
-        <button class="tool" type="submit">{{template "icon" "mute"}}<span>Ignore</span></button>
-      </form>
-      {{else}}
-      <form method="post" action="/issues/{{$r.ID}}/status" hx-post="/issues/{{$r.ID}}/status" hx-target="#issue-card-{{$r.ID}}" hx-swap="outerHTML">
-        {{template "csrf" $.CSRF}}<input type="hidden" name="next" value="{{$.Next}}"><input type="hidden" name="status" value="unresolved">
-        <button class="tool" type="submit">{{template "icon" "undo"}}<span>Reopen</span></button>
-      </form>
-      {{end}}
-    </div>
-    <div class="row tools">
-      {{if eq $r.Status "resolved"}}<span class="badge badge-ok">Resolved</span>{{else if eq $r.Status "ignored"}}<span class="badge">Ignored</span>{{end}}
-      {{if eq $r.Category "queue_failure"}}<span class="badge badge-queue">Job</span>{{else if eq $r.Category "notification"}}<span class="badge badge-info">Notification</span>{{end}}
-      <a class="tool" href="/issues/{{$r.ID}}"><span>Open</span>{{template "icon" "arrow"}}</a>
-    </div>
-  </header>
-  <div class="issue-card-body">
-    <div class="issue-card-main">
-      <a class="issue-title" href="/issues/{{$r.ID}}">{{if $r.JobName}}{{$r.JobName}}{{else}}{{$r.ExceptionType}}{{end}}</a>
-      <p class="issue-message">{{truncate $r.Message 200}}</p>
-      <p class="muted small mono truncate issue-culprit">{{if $r.JobName}}{{$r.ExceptionType}}{{else}}{{$r.Culprit}}{{end}}</p>
-    </div>
-    <div class="issue-card-side">
-      <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="Events per day, last 14 days">{{range $r.Bars}}<rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="1"{{if .Peak}} class="peak"{{end}}></rect>{{end}}</svg>
-      <dl class="issue-stats">
-        <div><dt>Events</dt><dd><strong>{{compact $r.OccurrenceCount}}</strong></dd></div>
-        <div><dt>Project</dt><dd class="truncate">{{$r.ProjectName}}</dd></div>
-        <div><dt>Last seen</dt><dd><time datetime="{{isoTime $r.LastSeenAt}}" title="{{datetime $r.LastSeenAt}}">{{timeago $r.LastSeenAt}}</time></dd></div>
-        <div><dt>Type</dt><dd>{{if eq $r.Category "queue_failure"}}Job{{else if eq $r.Category "notification"}}Notification{{else if eq $r.Category "message"}}Message{{else}}Exception{{end}}</dd></div>
-        <div><dt>First seen</dt><dd><time datetime="{{isoTime $r.FirstSeenAt}}" title="{{datetime $r.FirstSeenAt}}">{{timeago $r.FirstSeenAt}}</time></dd></div>
-        <div><dt>Release</dt><dd class="mono truncate">{{if $r.LastRelease}}{{$r.LastRelease}}{{else}}<span class="muted">—</span>{{end}}</dd></div>
-      </dl>
-    </div>
-  </div>
-</article>
 {{end}}

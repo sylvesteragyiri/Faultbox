@@ -1,0 +1,22 @@
+{{define "content"}}
+<header class="page-head"><div><h1>Requests</h1><p class="page-sub">Route volume, status codes and response duration.</p></div></header>
+
+<section class="request-charts" aria-label="Request metrics">
+  <article class="metric-chart-card">
+    <div class="metric-chart-head"><div><span class="metric-chart-label">Requests</span><strong class="metric-chart-value">0</strong></div><div class="metric-chart-legend"><span><i class="status-success"></i>1/2/3xx <b>0</b></span><span><i class="status-client"></i>4xx <b>0</b></span><span><i class="status-failure"></i>5xx <b>0</b></span></div></div>
+    <div class="chart-empty" role="img" aria-label="No request telemetry has been received"><p>No request telemetry yet</p><span>Route counts will appear when the Laravel SDK reports requests.</span></div>
+  </article>
+  <article class="metric-chart-card">
+    <div class="metric-chart-head"><div><span class="metric-chart-label">Duration</span><strong class="metric-chart-value">—</strong></div><div class="metric-chart-legend"><span><i class="status-success"></i>AVG <b>—</b></span><span><i class="status-client"></i>P95 <b>—</b></span></div></div>
+    <div class="chart-empty" role="img" aria-label="No request duration telemetry has been received"><p>No duration data yet</p><span>Average and p95 response times will appear here.</span></div>
+  </article>
+</section>
+
+<section class="route-section" aria-labelledby="routes-title">
+  <div class="section-head route-heading"><h2 id="routes-title">{{template "icon" "activity"}} 0 Routes</h2><label class="search-field route-search">{{template "icon" "search"}}<span class="sr-only">Search routes</span><input type="search" placeholder="Search routes" disabled aria-describedby="route-empty"></label></div>
+  <div class="table-wrap route-table-wrap">
+    <table class="data-table route-table"><thead><tr><th>Method</th><th>Path</th><th class="num">1/2/3xx</th><th class="num">4xx</th><th class="num">5xx</th><th class="num">Total</th><th class="num">Avg</th><th class="num">P95</th></tr></thead><tbody></tbody></table>
+    <div id="route-empty" class="table-empty empty-state compact-empty"><h2>No routes found</h2><p>Request route data will appear after M10 telemetry is enabled.</p></div>
+  </div>
+</section>
+{{end}}

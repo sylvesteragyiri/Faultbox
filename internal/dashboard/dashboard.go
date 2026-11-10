@@ -116,9 +116,13 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /issues", h.issueList)
 	authed.HandleFunc("GET /issues/{id}", h.issueShow)
 	authed.HandleFunc("POST /issues/{id}/status", h.issueSetStatus)
+	authed.HandleFunc("POST /issues/{id}/assign", h.issueAssign)
+	authed.HandleFunc("POST /issues/bulk", h.issueBulk)
 	authed.HandleFunc("GET /queue-failures", h.queueDashboard)
 	authed.HandleFunc("GET /queue-failures/jobs", h.failedJobList)
 	authed.HandleFunc("GET /queue-failures/{id}", h.failedJobShow)
+	authed.HandleFunc("GET /requests", h.requestPage)
+	authed.HandleFunc("GET /jobs", h.jobsPage)
 	authed.HandleFunc("GET /app-notifications", h.appNotifications)
 	authed.HandleFunc("GET /mail", h.mail)
 	authed.HandleFunc("GET /commands", h.commands)
@@ -158,7 +162,7 @@ func cacheStatic(next http.Handler) http.Handler {
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
 	"settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
-	"notifications", "notification_channel", "notification_secret", "deliveries", "commands", "cache",
+	"notifications", "notification_channel", "notification_secret", "deliveries", "commands", "cache", "requests", "jobs",
 }
 
 // assetURL returns a function mapping a static path to its URL with a
@@ -286,19 +290,26 @@ func (h *Handler) parseTemplates() error {
 
 // page is the data every template receives.
 type page struct {
-	Title   string
-	Nav     string
-	User    *store.User
-	CSRF    string
-	Version string
-	Flash   string
-	Data    any
+	Title       string
+	Nav         string
+	User        *store.User
+	CSRF        string
+	Version     string
+	Flash       string
+	SystemAlert string
+	Data        any
 	// Scope is the project and environment switcher, on full dashboard pages.
 	Scope *scopeView
 }
 
 func (h *Handler) newPage(r *http.Request, title, nav string, data any) page {
 	p := page{Title: title, Nav: nav, CSRF: csrfFrom(r.Context()), Version: h.opts.Version, Data: data}
+	if h.opts.Metrics != nil {
+		m := h.opts.Metrics()
+		if m.QueueCapacity > 0 && m.QueueDepth >= m.QueueCapacity {
+			p.SystemAlert = "Ingestion paused: the queue is full"
+		}
+	}
 	if u, ok := userFrom(r.Context()); ok {
 		p.User = &u
 		if !isHTMX(r) { // fragments don't render the switcher

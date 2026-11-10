@@ -93,10 +93,87 @@ func (s *Store) SetIssueStatus(ctx context.Context, id int64, status string) err
 		status, resolvedAt, now, id)
 }
 
+// SetIssueStatuses applies one status to a bounded group of issues atomically.
+func (s *Store) SetIssueStatuses(ctx context.Context, ids []int64, status string) error {
+	if status != IssueResolved && status != IssueIgnored && status != IssueUnresolved {
+		return invalid("unknown issue status %q", status)
+	}
+	if len(ids) == 0 || len(ids) > 100 {
+		return invalid("select between 1 and 100 issues")
+	}
+	now := s.nowMs()
+	var resolvedAt any
+	if status == IssueResolved {
+		resolvedAt = now
+	}
+	return s.inTx(ctx, func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if id <= 0 {
+				return invalid("issue IDs must be positive")
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE issues SET status = ?, resolved_at = ?, updated_at = ? WHERE id = ?`, status, resolvedAt, now, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// AssignIssue assigns an issue to a dashboard user, or clears its owner when userID is zero.
+func (s *Store) AssignIssue(ctx context.Context, id, userID int64) error {
+	if id <= 0 || userID < 0 {
+		return invalid("issue and user IDs must be valid")
+	}
+	var assignee any
+	if userID > 0 {
+		assignee = userID
+	}
+	return s.execOne(ctx, `UPDATE issues SET assigned_user_id = ?, updated_at = ? WHERE id = ?`, assignee, s.nowMs(), id)
+}
+
+// AssignIssues assigns or unassigns a bounded group of issues atomically.
+func (s *Store) AssignIssues(ctx context.Context, ids []int64, userID int64) error {
+	if len(ids) == 0 || len(ids) > 100 || userID < 0 {
+		return invalid("select between 1 and 100 issues and a valid assignee")
+	}
+	var assignee any
+	if userID > 0 {
+		assignee = userID
+	}
+	now := s.nowMs()
+	return s.inTx(ctx, func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if id <= 0 {
+				return invalid("issue IDs must be positive")
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE issues SET assigned_user_id = ?, updated_at = ? WHERE id = ?`, assignee, now, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // IssueStats are the overview counters.
 type IssueStats struct {
 	Total, Unresolved, NewToday int64
 	Events, QueueFailures       int64
+}
+
+// CountOpenIssues counts unresolved issues for the sidebar badge.
+func (s *Store) CountOpenIssues(ctx context.Context, projectID int64, environment string) (int64, error) {
+	query, args := `SELECT COUNT(*) FROM issues i WHERE i.status = ?`, []any{IssueUnresolved}
+	if projectID > 0 {
+		query += ` AND i.project_id = ?`
+		args = append(args, projectID)
+	}
+	if environment != "" {
+		query += ` AND EXISTS (SELECT 1 FROM issue_environments e WHERE e.issue_id = i.id AND e.environment = ?)`
+		args = append(args, environment)
+	}
+	var count int64
+	err := s.reader.QueryRowContext(ctx, query, args...).Scan(&count)
+	return count, err
 }
 
 // Stats counts issues and events across all projects.

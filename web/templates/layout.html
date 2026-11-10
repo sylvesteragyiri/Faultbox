@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false}'>
-  <title>{{.Title}} · Faultbox</title>
+  <title>{{.Title}} - Faultbox</title>
   <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
   <script src="{{asset "js/theme.js"}}"></script>
   <link rel="stylesheet" href="{{asset "css/app.css"}}">
@@ -16,19 +16,26 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="shell">
     <aside class="sidebar">
-      <a class="brand" href="/" aria-label="Faultbox home"><img src="{{asset "favicon.svg"}}" alt="" width="24" height="24"><span class="brand-name"><span>Fault</span><span class="brand-accent">box</span></span></a>
+      {{with .Scope}}{{template "scope_switcher" (dict "Scope" . "CSRF" $.CSRF)}}{{end}}
       <nav class="nav" aria-label="Main">
-        <p class="nav-label">Monitor</p>
+        <p class="nav-label nav-label-hidden">Main</p>
         <ul>
-          <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>{{template "icon" "overview"}}<span>Overview</span></a></li>
-          <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}>{{template "icon" "issues"}}<span>Issues</span></a></li>
-          <li><a href="/queue-failures" {{if eq .Nav "queue"}}aria-current="page"{{end}}>{{template "icon" "queue"}}<span>Queue Failures</span></a></li>
-          <li><a href="/app-notifications" {{if eq .Nav "app_notifications"}}aria-current="page"{{end}}>{{template "icon" "send"}}<span>App notifications</span></a></li>
-          <li><a href="/mail" {{if eq .Nav "mail"}}aria-current="page"{{end}}>{{template "icon" "mail"}}<span>Mail</span></a></li>
+          <li><a href="/" {{if eq .Nav "overview"}}aria-current="page"{{end}}>{{template "icon" "overview"}}<span>Dashboard</span></a></li>
+          <li><a href="/issues" {{if eq .Nav "issues"}}aria-current="page"{{end}}>{{template "icon" "issues"}}<span>Issues</span>{{if and .Scope (gt .Scope.OpenIssues 0)}}<span class="nav-count">{{compact .Scope.OpenIssues}}</span>{{end}}</a></li>
+        </ul>
+        <p class="nav-label">Activity</p>
+        <ul>
+          <li><a href="/requests" {{if eq .Nav "requests"}}aria-current="page"{{end}}>{{template "icon" "activity"}}<span>Requests</span></a></li>
+          <li><a href="/jobs" {{if eq .Nav "jobs"}}aria-current="page"{{end}}>{{template "icon" "queue"}}<span>Jobs</span></a></li>
           <li><a href="/commands" {{if eq .Nav "commands"}}aria-current="page"{{end}}>{{template "icon" "terminal"}}<span>Commands</span></a></li>
+          <li><a href="/app-notifications" {{if eq .Nav "app_notifications"}}aria-current="page"{{end}}>{{template "icon" "send"}}<span>Notifications</span></a></li>
+          <li><a href="/mail" {{if eq .Nav "mail"}}aria-current="page"{{end}}>{{template "icon" "mail"}}<span>Mail</span></a></li>
           <li><a href="/cache" {{if eq .Nav "cache"}}aria-current="page"{{end}}>{{template "icon" "database"}}<span>Cache</span></a></li>
         </ul>
-        <p class="nav-label">Configure</p>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      {{if .SystemAlert}}<a class="system-banner" href="/settings">{{template "icon" "issues"}}<span>{{.SystemAlert}}</span><small>View system status</small></a>{{end}}
+      <nav class="nav nav-bottom" aria-label="Manage">
         <ul>
           <li><a href="/projects" {{if eq .Nav "projects"}}aria-current="page"{{end}}>{{template "icon" "projects"}}<span>Projects</span></a></li>
           <li><a href="/notifications" {{if eq .Nav "notifications"}}aria-current="page"{{end}}>{{template "icon" "notifications"}}<span>Alerts</span></a></li>
@@ -36,38 +43,18 @@
         </ul>
       </nav>
       <div class="sidebar-foot">
-        <span class="avatar" aria-hidden="true">{{slice .User.Email 0 1}}</span>
-        <span class="user-meta">
-          <span class="truncate user-email" title="{{.User.Email}}">{{.User.Email}}</span>
-          <span class="version truncate">Faultbox {{.Version}}</span>
-        </span>
-        <form method="post" action="/logout">
-          {{template "csrf" .CSRF}}
-          <button class="icon-btn" type="submit" title="Log out" aria-label="Log out">{{template "icon" "logout"}}</button>
-        </form>
+        <details class="user-menu">
+          <summary><span class="avatar" aria-hidden="true">{{slice .User.Email 0 1}}</span><span class="user-meta"><span class="truncate user-email" title="{{.User.Email}}">{{.User.Email}}</span><span class="version truncate">Faultbox {{.Version}}</span></span><span class="user-more" aria-hidden="true">...</span></summary>
+          <div class="user-popover"><span class="menu-label">Appearance</span>{{template "theme_switch"}}<form method="post" action="/logout">{{template "csrf" .CSRF}}<button class="user-menu-action" type="submit">{{template "icon" "logout"}}Log out</button></form></div>
+        </details>
       </div>
     </aside>
     <div class="workspace">
-      <header class="topbar">
-        {{with .Scope}}{{template "scope_switcher" (dict "Scope" . "CSRF" $.CSRF)}}{{end}}
-        <form class="topbar-search" method="get" action="/issues" role="search">
-          {{template "icon" "search"}}
-          <label class="sr-only" for="global-search">Search</label>
-          <input id="global-search" type="search" name="q" placeholder="Search exceptions, messages, jobs, URLs, releases…" autocomplete="off" data-hotkey="/">
-          <input type="hidden" name="status" value="all">
-          <input type="hidden" name="category" value="all">
-          <kbd aria-hidden="true">/</kbd>
-        </form>
-        {{template "theme_switch"}}
-        <div class="topbar-actions">
-          <a class="btn btn-ghost" href="/projects/new">{{template "icon" "plus"}}<span>New project</span></a>
-        </div>
-      </header>
       <main class="main" id="main">
         {{if .Flash}}<div class="alert alert-ok" role="status">{{.Flash}}</div>{{end}}
         {{template "content" .}}
       </main>
-      <footer class="app-footer">&copy; {{year}} Sylvester Agyiri</footer>
+      <footer class="app-footer"><img src="{{asset "favicon.svg"}}" width="16" height="16" alt="">&copy; {{year}} Faultbox</footer>
     </div>
   </div>
 {{else}}

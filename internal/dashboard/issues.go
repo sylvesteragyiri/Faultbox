@@ -26,6 +26,7 @@ type issueForm struct {
 	Q        string
 	Range    string
 	Sort     string
+	Assigned string
 	Page     int
 
 	scope Scope // the switcher's choice: the default project and environment
@@ -50,6 +51,7 @@ func parseIssueForm(r *http.Request) issueForm {
 		Q:        strings.TrimSpace(q.Get("q")),
 		Range:    q.Get("range"),
 		Sort:     q.Get("sort"),
+		Assigned: q.Get("assigned"),
 	}
 	// Without explicit project or env parameters, the switcher's scope
 	// applies; "project=" (All projects) overrides it for this list.
@@ -59,6 +61,9 @@ func parseIssueForm(r *http.Request) issueForm {
 	}
 	if !q.Has("env") {
 		f.Env = f.scope.Env
+	}
+	if f.Assigned != "mine" && f.Assigned != "unassigned" {
+		f.Assigned = ""
 	}
 	if !q.Has("status") {
 		f.Status = store.IssueUnresolved
@@ -92,6 +97,12 @@ func (f issueForm) filter(now time.Time) store.IssueFilter {
 	sf := store.IssueFilter{
 		Category: f.Category, Environment: f.Env, Release: f.Release, ExceptionType: f.Type,
 		Search: f.Q, Sort: f.Sort, Page: f.Page, PerPage: 25,
+	}
+	if f.Assigned == "mine" {
+		// The current user ID is added by issueList after parsing the URL.
+		sf.AssigneeID = -1
+	} else if f.Assigned == "unassigned" {
+		sf.Unassigned = true
 	}
 	sf.ProjectID, _ = strconv.ParseInt(f.Project, 10, 64)
 	if f.Status != "all" {
@@ -128,6 +139,7 @@ func (f issueForm) values() url.Values {
 	set("q", f.Q, "")
 	set("range", f.Range, "")
 	set("sort", f.Sort, store.SortLastSeen)
+	set("assigned", f.Assigned, "")
 	if f.Page > 1 {
 		v.Set("page", strconv.Itoa(f.Page))
 	}
@@ -155,11 +167,23 @@ func (f issueForm) PageURL(page int) string { f.Page = page; return f.url() }
 
 // SortURL re-sorts the same results from page 1.
 func (f issueForm) SortURL(sort string) string { f.Sort, f.Page = sort, 1; return f.url() }
+func (f issueForm) StatusURL(status string) string {
+	f.Status, f.Assigned, f.Page = status, "", 1
+	return f.url()
+}
+func (f issueForm) CategoryURL(category string) string {
+	f.Category, f.Page = category, 1
+	return f.url()
+}
+func (f issueForm) AssignedURL(assigned string) string {
+	f.Status, f.Assigned, f.Page = store.IssueUnresolved, assigned, 1
+	return f.url()
+}
 
 // Filtered reports whether anything beyond the defaults is applied.
 func (f issueForm) Filtered() bool {
 	return f.ProjectSet() || f.EnvSet() || f.Release != "" || f.Type != "" || f.Q != "" || f.Range != "" ||
-		f.Status != store.IssueUnresolved || f.Category != store.CategoryErrors
+		f.Status != store.IssueUnresolved || f.Category != store.CategoryErrors || f.Assigned != ""
 }
 
 type issueRow struct {
@@ -192,6 +216,9 @@ func (h *Handler) issueRows(names map[int64]string, issues []store.IssueSummary)
 func (h *Handler) issueList(w http.ResponseWriter, r *http.Request) {
 	form := parseIssueForm(r)
 	f := form.filter(time.Now())
+	if f.AssigneeID == -1 {
+		f.AssigneeID = h.userID(r)
+	}
 	page, err := h.store.ListIssues(r.Context(), f)
 	if err != nil {
 		h.serverError(w, err)
@@ -209,13 +236,14 @@ func (h *Handler) issueList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Form":     form,
-		"Rows":     h.issueRows(names, page.Issues),
-		"Page":     page,
-		"Projects": projects,
-		"Facets":   facets,
-		"First":    (page.Page-1)*page.PerPage + 1,
-		"Last":     (page.Page-1)*page.PerPage + len(page.Issues),
+		"Form":          form,
+		"Rows":          h.issueRows(names, page.Issues),
+		"Page":          page,
+		"Projects":      projects,
+		"Facets":        facets,
+		"First":         (page.Page-1)*page.PerPage + 1,
+		"Last":          (page.Page-1)*page.PerPage + len(page.Issues),
+		"CurrentUserID": h.userID(r),
 	}
 	pg := h.newPage(r, "Issues", "issues", data)
 	// Filter changes swap only the results; the browser URL follows (hx-push-url).
@@ -472,11 +500,6 @@ func (h *Handler) issueSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.logger.Info("issue status changed", "issue_id", is.ID, "status", status, "user_id", h.userID(r))
-	// A card in the issue list re-renders itself.
-	if target := r.Header.Get("HX-Target"); isHTMX(r) && strings.HasPrefix(target, "issue-card-") {
-		h.renderIssueCard(w, r, is.ID)
-		return
-	}
 	if !isHTMX(r) {
 		// statusReturnPath only returns local issue or failed-job paths.
 		http.Redirect(w, r, statusReturnPath(r.PostFormValue("next"), is.ID), http.StatusSeeOther) //nolint:gosec // G710: local paths only, see statusReturnPath
@@ -488,6 +511,73 @@ func (h *Handler) issueSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.render(w, http.StatusOK, "issue", "issue_status", h.newPage(r, is.ExceptionType, "issues", map[string]any{"Issue": is}))
+}
+
+func (h *Handler) issueAssign(w http.ResponseWriter, r *http.Request) {
+	is, ok := h.loadIssue(w, r)
+	if !ok {
+		return
+	}
+	userID := h.userID(r)
+	if r.PostFormValue("assigned") != "me" {
+		userID = 0
+	}
+	if err := h.store.AssignIssue(r.Context(), is.ID, userID); err != nil {
+		h.serverError(w, err)
+		return
+	}
+	h.logger.Info("issue assignment changed", "issue_id", is.ID, "assigned_user_id", userID, "user_id", h.userID(r))
+	http.Redirect(w, r, issueListReturnPath(r.PostFormValue("next")), http.StatusSeeOther)
+}
+
+func (h *Handler) issueBulk(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		h.errorPage(w, r, http.StatusBadRequest, "Invalid issue selection.")
+		return
+	}
+	ids := make([]int64, 0, min(len(r.Form["id"]), 100))
+	seen := make(map[int64]struct{}, 100)
+	for _, raw := range r.Form["id"] {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			h.errorPage(w, r, http.StatusBadRequest, "Select valid issues.")
+			return
+		}
+		if _, ok := seen[id]; !ok {
+			ids = append(ids, id)
+			seen[id] = struct{}{}
+		}
+		if len(ids) > 100 {
+			h.errorPage(w, r, http.StatusBadRequest, "Select no more than 100 issues.")
+			return
+		}
+	}
+	operation := r.PostFormValue("operation")
+	var updateErr error
+	switch operation {
+	case store.IssueResolved, store.IssueIgnored, store.IssueUnresolved:
+		updateErr = h.store.SetIssueStatuses(r.Context(), ids, operation)
+	case "assign_me":
+		updateErr = h.store.AssignIssues(r.Context(), ids, h.userID(r))
+	case "unassign":
+		updateErr = h.store.AssignIssues(r.Context(), ids, 0)
+	default:
+		updateErr = errors.New("unknown bulk operation")
+	}
+	if updateErr != nil {
+		h.errorPage(w, r, http.StatusBadRequest, "Choose issues and a valid bulk action.")
+		return
+	}
+	h.logger.Info("bulk issue update", "issue_count", len(ids), "operation", operation, "user_id", h.userID(r))
+	http.Redirect(w, r, issueListReturnPath(r.PostFormValue("next")), http.StatusSeeOther)
+}
+
+func issueListReturnPath(next string) string {
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Path != "/issues" {
+		return "/issues"
+	}
+	return (&url.URL{Path: "/issues", RawQuery: u.Query().Encode()}).String()
 }
 
 // statusReturnPath is where a plain (non-HTMX) status form returns to: the
@@ -503,40 +593,6 @@ func statusReturnPath(next string, issueID int64) string {
 		return (&url.URL{Path: "/issues", RawQuery: u.Query().Encode()}).String()
 	}
 	return "/issues/" + strconv.FormatInt(issueID, 10)
-}
-
-// renderIssueCard renders one issue-list card, after a status change.
-func (h *Handler) renderIssueCard(w http.ResponseWriter, r *http.Request, id int64) {
-	ctx := r.Context()
-	is, err := h.store.Issue(ctx, id)
-	if err != nil {
-		h.serverError(w, err)
-		return
-	}
-	trend, err := h.store.IssueTrend(ctx, id, store.TrendDays)
-	if err != nil {
-		h.serverError(w, err)
-		return
-	}
-	project, err := h.store.Project(ctx, is.ProjectID)
-	if err != nil {
-		h.serverError(w, err)
-		return
-	}
-	counts := make([]int64, len(trend))
-	for i, d := range trend {
-		counts[i] = d.Errors
-	}
-	sum := store.IssueSummary{
-		ID: is.ID, ProjectID: is.ProjectID, Fingerprint: is.Fingerprint, Category: is.Category, Level: is.Level,
-		ExceptionType: is.ExceptionType, Message: is.Message, Culprit: is.Culprit, JobName: is.JobName,
-		Status: is.Status, OccurrenceCount: is.OccurrenceCount, FirstSeenAt: is.FirstSeenAt, LastSeenAt: is.LastSeenAt,
-		LastRelease: is.LastRelease, Trend: counts,
-	}
-	row := issueRow{IssueSummary: sum, ProjectName: project.Name, Spark: sparkline(counts), Bars: sparkBars(counts)}
-	h.renderPartial(w, "issues", "issue_card", map[string]any{
-		"Row": row, "CSRF": csrfFrom(ctx), "Next": r.PostFormValue("next"),
-	})
 }
 
 // notificationView is what a failed Laravel notification event says about
