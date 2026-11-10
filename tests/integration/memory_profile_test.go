@@ -81,7 +81,7 @@ func TestMemoryProfile(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
-				eventID := []byte(fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1))
+				eventID := fmt.Appendf(nil, "00000000-0000-4000-8000-%012d", i+1)
 				requestBody := bytes.Replace(body, []byte("00000000-0000-4000-8000-000000000000"), eventID, 1)
 				for {
 					status := a.PostRaw(client, "/api/v1/events", key, requestBody)
