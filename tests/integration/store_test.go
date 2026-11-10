@@ -38,6 +38,9 @@ func TestOpenAppliesMigrationsAndIsIdempotent(t *testing.T) {
 	if err != nil || v1 < 1 {
 		t.Fatalf("schema version = %d, %v", v1, err)
 	}
+	if applied := st.Migrated(); len(applied) == 0 || applied[len(applied)-1] != v1 {
+		t.Fatalf("a fresh database should apply every migration up to %d, applied %v", v1, applied)
+	}
 	hash, hint := newKey(t)
 	if _, err := st.CreateProject(ctx, "Persisted", nil, hash, hint); err != nil {
 		t.Fatal(err)
@@ -54,6 +57,9 @@ func TestOpenAppliesMigrationsAndIsIdempotent(t *testing.T) {
 	v2, _ := st.SchemaVersion(ctx)
 	if v2 != v1 {
 		t.Fatalf("schema version changed on reopen: %d → %d", v1, v2)
+	}
+	if applied := st.Migrated(); len(applied) != 0 {
+		t.Fatalf("reopening a current database should migrate nothing, applied %v", applied)
 	}
 	projects, err := st.Projects(ctx)
 	if err != nil || len(projects) != 1 || projects[0].Name != "Persisted" {

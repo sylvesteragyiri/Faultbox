@@ -42,7 +42,7 @@ Other settings:
 - **A different port:** `FAULTBOX_HOST_PORT=9000`.
 - **Update to the latest `main` image:** run `docker compose pull` before `docker compose up -d`.
 
-The data lives in the `faultbox-data` volume. `docker compose down` keeps it; `docker compose down -v` deletes it.
+The data lives in the `faultbox-data` volume. `docker compose down` keeps it; `docker compose down -v` deletes it. On each start, Faultbox checks the embedded Goose migration history and applies any migrations the running image adds. An up-to-date database is left alone, and startup stops with an error if a migration fails. Back up the volume before upgrading.
 
 Without Compose, the same thing as one command:
 

@@ -35,6 +35,9 @@ type Store struct {
 	writer *sql.DB
 	reader *sql.DB
 	now    func() time.Time
+	// migrated lists the migration versions this Open applied, oldest
+	// first; empty when the schema was already current.
+	migrated []int64
 }
 
 // Open opens (creating if needed) the database at path, applies pending
@@ -101,10 +104,23 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load migrations: %w", err)
 	}
-	if _, err := provider.Up(ctx); err != nil {
+	// Up applies only the migrations not yet recorded in goose_db_version,
+	// like `php artisan migrate`: nothing runs when the schema is current,
+	// and existing data is never dropped.
+	results, err := provider.Up(ctx)
+	if err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
+	for _, r := range results {
+		s.migrated = append(s.migrated, r.Source.Version)
+	}
 	return s.backfillNotificationIssues(ctx)
+}
+
+// Migrated lists the migration versions applied when the store opened,
+// oldest first. It is empty when there was nothing to migrate.
+func (s *Store) Migrated() []int64 {
+	return append([]int64(nil), s.migrated...)
 }
 
 // SchemaVersion returns the highest applied migration version.

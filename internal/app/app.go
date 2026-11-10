@@ -48,6 +48,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	if err != nil {
 		return nil, err
 	}
+	if applied := st.Migrated(); len(applied) > 0 {
+		logger.Info("database migrated", "applied", applied)
+	} else {
+		logger.Info("database schema up to date, nothing to migrate")
+	}
 
 	a := &App{cfg: cfg, logger: logger, store: st, metrics: &ingest.Metrics{}}
 	a.queue = ingest.NewQueue(cfg.QueueSize, cfg.QueueMaxBytes)
