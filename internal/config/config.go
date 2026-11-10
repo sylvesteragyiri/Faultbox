@@ -41,6 +41,10 @@ type Config struct {
 	// shown to users as the DSN for their Laravel apps. Optional.
 	PublicURL string
 
+	// Turnstile protects dashboard login when both keys are configured.
+	TurnstileSiteKey   string
+	TurnstileSecretKey string
+
 	// Ingestion limits (D14).
 	QueueSize     int   // events
 	QueueMaxBytes int64 // estimated bytes across queued events
@@ -57,21 +61,23 @@ type Config struct {
 // Load reads configuration using getenv (normally os.Getenv).
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		Port:            or(getenv("FAULTBOX_PORT"), "8080"),
-		DatabasePath:    or(getenv("FAULTBOX_DATABASE_PATH"), "faultbox.db"),
-		Secret:          []byte(getenv("FAULTBOX_SECRET")),
-		AdminEmail:      strings.TrimSpace(getenv("FAULTBOX_ADMIN_EMAIL")),
-		AdminPassword:   getenv("FAULTBOX_ADMIN_PASSWORD"),
-		PublicURL:       strings.TrimSuffix(strings.TrimSpace(getenv("FAULTBOX_PUBLIC_URL")), "/"),
-		RetentionDays:   30,
-		SessionTTL:      7 * 24 * time.Hour,
-		BcryptCost:      12,
-		ShutdownTimeout: 10 * time.Second,
-		QueueSize:       1000,
-		QueueMaxBytes:   32 << 20,
-		RateLimit:       50,
-		RateBurst:       200,
-		MaxEventBytes:   256 << 10,
+		Port:               or(getenv("FAULTBOX_PORT"), "8080"),
+		DatabasePath:       or(getenv("FAULTBOX_DATABASE_PATH"), "faultbox.db"),
+		Secret:             []byte(getenv("FAULTBOX_SECRET")),
+		AdminEmail:         strings.TrimSpace(getenv("FAULTBOX_ADMIN_EMAIL")),
+		AdminPassword:      getenv("FAULTBOX_ADMIN_PASSWORD"),
+		PublicURL:          strings.TrimSuffix(strings.TrimSpace(getenv("FAULTBOX_PUBLIC_URL")), "/"),
+		TurnstileSiteKey:   strings.TrimSpace(getenv("FAULTBOX_TURNSTILE_SITE_KEY")),
+		TurnstileSecretKey: strings.TrimSpace(getenv("FAULTBOX_TURNSTILE_SECRET_KEY")),
+		RetentionDays:      30,
+		SessionTTL:         7 * 24 * time.Hour,
+		BcryptCost:         12,
+		ShutdownTimeout:    10 * time.Second,
+		QueueSize:          1000,
+		QueueMaxBytes:      32 << 20,
+		RateLimit:          50,
+		RateBurst:          200,
+		MaxEventBytes:      256 << 10,
 	}
 
 	var errs []error
@@ -148,6 +154,9 @@ func (c Config) Validate() error {
 		if u, err := url.Parse(c.PublicURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			errs = append(errs, fmt.Errorf("FAULTBOX_PUBLIC_URL: %q must be an absolute http(s) URL", c.PublicURL))
 		}
+	}
+	if (c.TurnstileSiteKey == "") != (c.TurnstileSecretKey == "") {
+		errs = append(errs, errors.New("set both FAULTBOX_TURNSTILE_SITE_KEY and FAULTBOX_TURNSTILE_SECRET_KEY, or neither"))
 	}
 	if (c.AdminEmail == "") != (c.AdminPassword == "") {
 		errs = append(errs, errors.New("set both FAULTBOX_ADMIN_EMAIL and FAULTBOX_ADMIN_PASSWORD, or neither"))

@@ -104,8 +104,9 @@ func IsHTTPS(r *http.Request, trustProxy bool) bool {
 // only same-origin scripts and styles, so templates must not use inline
 // <script> or style attributes.
 func SecurityHeaders(next http.Handler) http.Handler {
-	const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
-		"connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
+	const csp = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self' data:; " +
+		"connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; " +
+		"form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", csp)

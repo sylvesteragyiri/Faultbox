@@ -63,17 +63,19 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	}
 
 	dash, err := dashboard.New(dashboard.Options{
-		Store:         st,
-		Logger:        logger,
-		CSRFKey:       keys.CSRF,
-		SessionTTL:    cfg.SessionTTL,
-		TrustProxy:    cfg.TrustProxy,
-		Version:       version,
-		RetentionDays: cfg.RetentionDays,
-		PublicURL:     cfg.PublicURL,
-		Metrics:       func() ingest.Snapshot { return a.metrics.Snapshot(a.queue) },
-		EncryptionKey: keys.Encryption,
-		Notifier:      a.notifier,
+		Store:              st,
+		Logger:             logger,
+		CSRFKey:            keys.CSRF,
+		SessionTTL:         cfg.SessionTTL,
+		TrustProxy:         cfg.TrustProxy,
+		Version:            version,
+		RetentionDays:      cfg.RetentionDays,
+		PublicURL:          cfg.PublicURL,
+		TurnstileSiteKey:   cfg.TurnstileSiteKey,
+		TurnstileSecretKey: cfg.TurnstileSecretKey,
+		Metrics:            func() ingest.Snapshot { return a.metrics.Snapshot(a.queue) },
+		EncryptionKey:      keys.Encryption,
+		Notifier:           a.notifier,
 	})
 	if err != nil {
 		_ = st.Close()

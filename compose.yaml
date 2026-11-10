@@ -1,50 +1,41 @@
-# Faultbox with Docker Compose.
-#
-#   1. Set the variables below in a .env file next to this one (or in your
-#      shell). FAULTBOX_SECRET must stay the same across restarts: it signs
-#      CSRF tokens and encrypts stored notification secrets.
-#
-#        FAULTBOX_SECRET=$(openssl rand -base64 48)
-#        FAULTBOX_ADMIN_EMAIL=you@example.com
-#        FAULTBOX_ADMIN_PASSWORD=a-long-password
-#        FAULTBOX_PUBLIC_URL=http://localhost:8080
-#
-#   2. docker compose pull && docker compose up -d
-#   3. Open http://localhost:8080, log in, create a project, copy its API key.
-#
-# Laravel apps in other Compose projects can reach Faultbox at
-# http://faultbox:8080 by joining the "faultbox" network (see README.md).
+# Faultbox Compose deployment; configure values in .env.
 
 services:
   faultbox:
     image: ghcr.io/sylvesteragyiri/faultbox:edge
     container_name: faultbox
     restart: unless-stopped
+    # Host port
     ports:
       - "${FAULTBOX_HOST_PORT:-8080}:8080"
     environment:
+      # App and storage
       FAULTBOX_SECRET: ${FAULTBOX_SECRET:?set FAULTBOX_SECRET (at least 32 bytes), e.g. openssl rand -base64 48}
-      FAULTBOX_ADMIN_EMAIL: ${FAULTBOX_ADMIN_EMAIL:-}
-      FAULTBOX_ADMIN_PASSWORD: ${FAULTBOX_ADMIN_PASSWORD:-}
-      # The address Laravel apps and alert links use. Set it to your public
-      # URL (https://errors.example.com) when deployed.
-      FAULTBOX_PUBLIC_URL: ${FAULTBOX_PUBLIC_URL:-http://localhost:8080}
-      # Only behind your own reverse proxy (Nginx, Traefik, Caddy).
-      FAULTBOX_TRUST_PROXY: ${FAULTBOX_TRUST_PROXY:-false}
-      FAULTBOX_RETENTION_DAYS: ${FAULTBOX_RETENTION_DAYS:-30}
-      FAULTBOX_LOG_LEVEL: ${FAULTBOX_LOG_LEVEL:-info}
-      # Fixed inside the container; the database lives on the volume.
       FAULTBOX_PORT: "8080"
       FAULTBOX_DATABASE_PATH: /data/faultbox.db
+
+      # Dashboard admin (first user only)
+      FAULTBOX_ADMIN_EMAIL: ${FAULTBOX_ADMIN_EMAIL:-}
+      FAULTBOX_ADMIN_PASSWORD: ${FAULTBOX_ADMIN_PASSWORD:-}
+
+      # Public URL and proxy
+      FAULTBOX_PUBLIC_URL: ${FAULTBOX_PUBLIC_URL:-http://localhost:8080}
+      FAULTBOX_TRUST_PROXY: ${FAULTBOX_TRUST_PROXY:-false}
+
+      # Login protection (set both keys)
+      FAULTBOX_TURNSTILE_SITE_KEY: ${FAULTBOX_TURNSTILE_SITE_KEY:-}
+      FAULTBOX_TURNSTILE_SECRET_KEY: ${FAULTBOX_TURNSTILE_SECRET_KEY:-}
+
+      # Limits and logging
+      FAULTBOX_RETENTION_DAYS: ${FAULTBOX_RETENTION_DAYS:-30}
+      FAULTBOX_LOG_LEVEL: ${FAULTBOX_LOG_LEVEL:-info}
     volumes:
       - faultbox-data:/data
-    # The resource budget Faultbox is built and load-tested for (PRD §9).
-    # The image sets GOMEMLIMIT=96MiB; raise both together if you change this.
+    # Resource limits match the default Go memory limit.
     mem_limit: 128m
     cpus: 0.5
     networks:
       - faultbox
-    # The image's HEALTHCHECK probes /ready (database answering, queue not full).
 
 volumes:
   faultbox-data:

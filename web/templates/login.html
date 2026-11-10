@@ -14,14 +14,21 @@
   <form method="post" action="/login" class="stack">
     {{template "csrf" $.CSRF}}
     <input type="hidden" name="next" value="{{.Next}}">
+    {{if .TurnstileSiteKey}}
+      <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {{end}}
     <label>Email
       <input type="email" name="email" value="{{.Email}}" autocomplete="username" required autofocus>
     </label>
     <label>Password
       <input type="password" name="password" autocomplete="current-password" required>
     </label>
+    {{if .TurnstileSiteKey}}
+      <div class="cf-turnstile" data-sitekey="{{.TurnstileSiteKey}}" data-action="login" data-theme="auto"></div>
+    {{end}}
     <button class="btn btn-primary" type="submit">Log in</button>
   </form>
   {{end}}
+  <footer class="login-copyright">&copy; {{year}} Sylvester Agyiri</footer>
 </div>
 {{end}}

@@ -160,10 +160,11 @@ func (h *Handler) renderLogin(w http.ResponseWriter, r *http.Request, status int
 		return
 	}
 	h.render(w, status, "login", "", h.newPage(r, "Log in", "", map[string]any{
-		"Email":   email,
-		"Error":   errMsg,
-		"Next":    safeNext(r.FormValue("next")),
-		"NoUsers": users == 0,
+		"Email":            email,
+		"Error":            errMsg,
+		"Next":             safeNext(r.FormValue("next")),
+		"NoUsers":          users == 0,
+		"TurnstileSiteKey": h.opts.TurnstileSiteKey,
 	}))
 }
 
@@ -177,6 +178,20 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		h.renderLogin(w, r, http.StatusTooManyRequests, email,
 			"Too many failed attempts. Wait 15 minutes and try again.")
 		return
+	}
+	if h.opts.TurnstileSiteKey != "" {
+		valid, err := h.verifyTurnstile(r.Context(), r.PostFormValue("cf-turnstile-response"), requestHostname(r.Host))
+		if err != nil {
+			h.logger.Warn("turnstile verification unavailable", "error", err)
+			h.renderLogin(w, r, http.StatusServiceUnavailable, email, "The security check is unavailable. Try again shortly.")
+			return
+		}
+		if !valid {
+			h.loginByIP.Fail(ipKey)
+			h.loginByID.Fail(emailKey)
+			h.renderLogin(w, r, http.StatusUnauthorized, email, "Complete the security check and try again.")
+			return
+		}
 	}
 
 	user, hash, err := h.store.UserByEmail(r.Context(), email)

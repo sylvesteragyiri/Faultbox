@@ -35,6 +35,11 @@ type Options struct {
 	RetentionDays int
 	// PublicURL is the address Laravel apps report to, shown in setup snippets.
 	PublicURL string
+	// Turnstile protects dashboard login when both keys are configured.
+	TurnstileSiteKey   string
+	TurnstileSecretKey string
+	// TurnstileHTTPClient can be set in tests; production defaults to a short timeout.
+	TurnstileHTTPClient *http.Client
 	// Metrics reports ingestion counters for the Settings page.
 	Metrics func() ingest.Snapshot
 	// EncryptionKey seals channel secrets (D17).
@@ -52,13 +57,14 @@ type Notifier interface {
 
 // Handler is the dashboard's root handler.
 type Handler struct {
-	opts      Options
-	store     *store.Store
-	logger    *slog.Logger
-	pages     map[string]*template.Template
-	handler   http.Handler
-	loginByIP *auth.FailureLimiter
-	loginByID *auth.FailureLimiter
+	opts            Options
+	store           *store.Store
+	logger          *slog.Logger
+	pages           map[string]*template.Template
+	handler         http.Handler
+	loginByIP       *auth.FailureLimiter
+	loginByID       *auth.FailureLimiter
+	turnstileClient *http.Client
 }
 
 // Login limits: 10 failures per IP and 5 per email in 15 minutes (D9).
@@ -71,11 +77,15 @@ const (
 // New builds the dashboard handler.
 func New(opts Options) (*Handler, error) {
 	h := &Handler{
-		opts:      opts,
-		store:     opts.Store,
-		logger:    opts.Logger,
-		loginByIP: auth.NewFailureLimiter(loginFailuresPerIP, loginFailureWindow),
-		loginByID: auth.NewFailureLimiter(loginFailuresPerEmail, loginFailureWindow),
+		opts:            opts,
+		store:           opts.Store,
+		logger:          opts.Logger,
+		loginByIP:       auth.NewFailureLimiter(loginFailuresPerIP, loginFailureWindow),
+		loginByID:       auth.NewFailureLimiter(loginFailuresPerEmail, loginFailureWindow),
+		turnstileClient: opts.TurnstileHTTPClient,
+	}
+	if h.turnstileClient == nil {
+		h.turnstileClient = &http.Client{Timeout: 5 * time.Second}
 	}
 	if err := h.parseTemplates(); err != nil {
 		return nil, err
@@ -179,6 +189,7 @@ func assetURL() func(string) string {
 func (h *Handler) parseTemplates() error {
 	funcs := template.FuncMap{
 		"asset":   assetURL(),
+		"year":    func() int { return time.Now().UTC().Year() },
 		"timeago": timeAgo,
 		"datetime": func(t time.Time) string {
 			if t.IsZero() {

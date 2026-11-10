@@ -60,12 +60,24 @@ docker run -d --name faultbox -p 8080:8080   -v faultbox-data:/data   -e FAULTBO
 | `FAULTBOX_ADMIN_EMAIL` / `FAULTBOX_ADMIN_PASSWORD` | — | Create the first dashboard user, but only while no users exist. The password must be at least 12 characters. |
 | `FAULTBOX_PUBLIC_URL` | taken from the request | External URL, shown as the DSN in Laravel setup snippets and used for links in alert emails and webhooks. |
 | `FAULTBOX_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` and `X-Forwarded-Proto`. Enable only behind your own reverse proxy. |
+| `FAULTBOX_TURNSTILE_SITE_KEY` / `FAULTBOX_TURNSTILE_SECRET_KEY` | unset | Optional Cloudflare Turnstile protection for dashboard login. Set both or neither. |
 | `FAULTBOX_RETENTION_DAYS` | `30` | Event retention. Used from M7. |
 | `FAULTBOX_MAX_EVENT_KB` | `256` | Largest event body after decompression. |
 | `FAULTBOX_RATE_LIMIT` / `FAULTBOX_RATE_BURST` | `50` / `200` | Events per second per project, and the burst size. |
 | `FAULTBOX_QUEUE_SIZE` / `FAULTBOX_QUEUE_MAX_MB` | `1000` / `32` | Ingestion queue limits. When either is reached, the API answers `503`. |
 | `FAULTBOX_SHUTDOWN_TIMEOUT` | `10s` | Grace period for in-flight requests on shutdown. |
 | `FAULTBOX_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. Logs are JSON on stdout. |
+
+### Cloudflare Turnstile
+
+To protect dashboard sign-in, create a Turnstile widget for the hostname that
+serves Faultbox and set both `FAULTBOX_TURNSTILE_SITE_KEY` and
+`FAULTBOX_TURNSTILE_SECRET_KEY`. The site key renders the login widget; the
+secret stays on the server. Faultbox validates each login token with
+Cloudflare's Siteverify API and checks the `login` action and request hostname.
+If Siteverify is unavailable, sign-in fails closed and shows a retry message.
+Leave both variables unset to keep Turnstile disabled. For local testing, use
+Cloudflare's test keys.
 
 ## Commands
 
