@@ -39,7 +39,7 @@ func (h *Handler) verifyTurnstile(ctx context.Context, token, hostname string) (
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("siteverify returned HTTP %d", resp.StatusCode)
 	}
