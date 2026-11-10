@@ -9,7 +9,7 @@
 #        FAULTBOX_ADMIN_PASSWORD=a-long-password
 #        FAULTBOX_PUBLIC_URL=http://localhost:8080
 #
-#   2. docker compose up -d --build
+#   2. docker compose pull && docker compose up -d
 #   3. Open http://localhost:8080, log in, create a project, copy its API key.
 #
 # Laravel apps in other Compose projects can reach Faultbox at
@@ -17,13 +17,7 @@
 
 services:
   faultbox:
-    build:
-      context: .
-      args:
-        VERSION: ${FAULTBOX_VERSION:-dev}
-    # Or use the published image instead of building:
-    # image: ghcr.io/sylvesteragyiri/faultbox:edge
-    image: faultbox:local
+    image: ghcr.io/sylvesteragyiri/faultbox:edge
     container_name: faultbox
     restart: unless-stopped
     ports:

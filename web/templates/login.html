@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="login card">
-  <h1 class="login-title"><img src="{{asset "favicon.svg"}}" alt="" width="28" height="28"> Faultbox</h1>
-  <p class="login-sub">Sign in to your error dashboard</p>
+  <h1 class="login-title"><img src="{{asset "favicon.svg"}}" alt="" width="32" height="32"><span class="brand-name"><span>Fault</span><span class="brand-accent">box</span></span></h1>
+  <p class="login-sub">Self-hosted error and queue monitoring for Laravel</p>
   {{with .Data}}
   {{if .NoUsers}}
     <div class="alert alert-warn">

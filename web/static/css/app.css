@@ -247,6 +247,8 @@ img, svg { max-width: 100%; }
 }
 .brand:hover { color: var(--text); }
 .brand img { border-radius: 8px; box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 55%, transparent); }
+.brand-name { font-weight: 720; letter-spacing: -.035em; }
+.brand-accent { color: var(--accent); }
 .nav { display: grid; gap: .2rem; align-content: start; }
 .nav-label {
   font-size: .66rem; font-weight: 650; text-transform: uppercase; letter-spacing: .1em;

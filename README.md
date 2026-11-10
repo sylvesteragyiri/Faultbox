@@ -14,7 +14,7 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 
 ## Run with Docker Compose
 
-[compose.yaml](compose.yaml) builds the image from this repository and runs it inside the 128 MB / 0.5 CPU budget, with the database on a named volume.
+[compose.yaml](compose.yaml) pulls the image built and published by GitHub Actions (`ghcr.io/sylvesteragyiri/faultbox:edge`) and runs it inside the 128 MB / 0.5 CPU budget, with the database on a named volume. The `edge` tag follows successful builds from `main`.
 
 1. Create a `.env` next to `compose.yaml`:
 
@@ -30,7 +30,8 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 2. Start it:
 
    ```bash
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d
    docker compose ps          # wait for "healthy"
    docker compose logs -f     # JSON logs
    ```
@@ -39,7 +40,7 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 
 Other settings:
 - **A different port:** `FAULTBOX_HOST_PORT=9000`.
-- **The published image instead of a local build:** swap `build:` for `image: ghcr.io/sylvesteragyiri/faultbox:edge` in `compose.yaml`.
+- **Update to the latest `main` image:** run `docker compose pull` before `docker compose up -d`.
 
 The data lives in the `faultbox-data` volume. `docker compose down` keeps it; `docker compose down -v` deletes it.
 
