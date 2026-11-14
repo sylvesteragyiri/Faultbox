@@ -11,6 +11,8 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 > - **Next:** operations and hardening (M7).
 >
 > See [docs/roadmap.md](docs/roadmap.md).
+>
+> Security controls and known gaps: [docs/security-practices.md](../docs/security-practices.md).
 
 ## Run with Docker Compose
 
