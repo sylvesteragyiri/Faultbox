@@ -23,7 +23,17 @@ type Message struct {
 	Environment string       `json:"environment,omitempty"`
 	Issue       *IssueRef    `json:"issue,omitempty"`
 	Threshold   *ThresholdOf `json:"threshold,omitempty"`
+	RedisMemory *RedisMemory `json:"redis_memory,omitempty"`
 	SentAt      time.Time    `json:"sent_at"` // set when sent
+}
+
+// RedisMemory describes a Redis memory threshold crossing.
+type RedisMemory struct {
+	Server    string `json:"server"`
+	UsedBytes int64  `json:"used_bytes"`
+	MaxBytes  int64  `json:"max_bytes"`
+	Percent   int64  `json:"percent"`
+	Threshold int64  `json:"threshold"`
 }
 
 // ProjectRef names the project an alert is about.
@@ -152,6 +162,10 @@ var triggerHeadline = map[string]string{
 
 // text renders the plain-text email body.
 func (m Message) text() string {
+	if m.RedisMemory != nil {
+		return fmt.Sprintf("Redis server %q is using %d%% of its configured maxmemory (%s of %s). It crossed the %d%% alert threshold.\n\n--\nSent by the %q channel in Faultbox.\n",
+			m.RedisMemory.Server, m.RedisMemory.Percent, byteText(m.RedisMemory.UsedBytes), byteText(m.RedisMemory.MaxBytes), m.RedisMemory.Threshold, m.Channel)
+	}
 	var b strings.Builder
 	b.WriteString(triggerHeadline[m.Trigger])
 	if m.Project != nil && m.Project.Name != "" {
@@ -186,4 +200,17 @@ func (m Message) text() string {
 	}
 	b.WriteString("\n--\nSent by the \"" + m.Channel + "\" channel in Faultbox.\n")
 	return b.String()
+}
+
+func byteText(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit && exp < 6; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }

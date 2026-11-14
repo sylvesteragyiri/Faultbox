@@ -257,6 +257,30 @@ func TestNotificationTriggersDeliverByWebhookAndEmail(t *testing.T) {
 	}
 }
 
+func TestRedisMemoryAlertUsesDurableWebhookDelivery(t *testing.T) {
+	t.Parallel()
+	r := newNotifyRig(t)
+	hook := newHookServer(t, "redis-secret")
+	r.webhook("On call", hook.URL, "redis-secret", nil)
+	if err := r.n.RedisMemoryAlert(context.Background(), "Production cache", 900, 1000, 90, 90); err != nil {
+		t.Fatal(err)
+	}
+	r.flush()
+	hook.mu.Lock()
+	defer hook.mu.Unlock()
+	if len(hook.bodies) != 1 || !hook.sigs[0] {
+		t.Fatalf("Redis webhook deliveries = %d, signature = %v", len(hook.bodies), hook.sigs)
+	}
+	alert := hook.bodies[0]
+	if alert.Trigger != store.TriggerThreshold || alert.RedisMemory == nil || alert.RedisMemory.Server != "Production cache" || alert.RedisMemory.Percent != 90 || alert.RedisMemory.Threshold != 90 {
+		t.Fatalf("Redis alert payload = %+v", alert)
+	}
+	history := r.history(store.NotificationFilter{Limit: 10})
+	if len(history) != 1 || history[0].Status != store.NotificationSent {
+		t.Fatalf("Redis notification history = %+v", history)
+	}
+}
+
 func TestFailedDeliveriesAreRetriedAndRecorded(t *testing.T) {
 	t.Parallel()
 	r := newNotifyRig(t)

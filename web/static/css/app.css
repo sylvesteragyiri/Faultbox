@@ -673,6 +673,9 @@ fieldset > legend { font-weight: 500; font-size: .84rem; padding: 0 .35rem; }
 .breakdown-count { white-space: nowrap; font-weight: 500; text-align: right; }
 
 /* ---- charts (server-rendered SVG) ---- */
+.redis-memory-line { stroke: var(--series-1); stroke-linecap: round; stroke-linejoin: round; }
+.chart-grid { stroke: var(--grid); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-label { fill: var(--muted); font-size: 10px; font-family: var(--font); }
 .chart { margin: 0; position: relative; }
 .legend { list-style: none; display: flex; gap: 1.1rem; margin: 0 0 .75rem; padding: 0; font-size: .8rem; color: var(--muted); font-weight: 450; }
 .legend li { display: flex; align-items: center; gap: .45rem; }

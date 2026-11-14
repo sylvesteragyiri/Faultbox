@@ -424,6 +424,39 @@ func (n *Notifier) SendTest(ctx context.Context, channelID int64) (int64, error)
 	return id, nil
 }
 
+// RedisMemoryAlert records and queues one Redis threshold alert for every
+// enabled notification channel. Per-target alert preference is enforced by
+// the Redis collector before this method is called.
+func (n *Notifier) RedisMemoryAlert(ctx context.Context, server string, used, maxMemory, percent, threshold int64) error {
+	channels, err := n.store.Channels(ctx)
+	if err != nil {
+		return fmt.Errorf("load channels for Redis alert: %w", err)
+	}
+	for _, c := range channels {
+		if !c.Enabled {
+			continue
+		}
+		msg := Message{
+			Trigger: store.TriggerThreshold, Title: "Redis memory threshold crossed", Channel: c.Name,
+			RedisMemory: &RedisMemory{Server: server, UsedBytes: used, MaxBytes: maxMemory, Percent: percent, Threshold: threshold},
+			Subject:     oneLine(fmt.Sprintf("[Faultbox] Redis %q memory reached %d%% (threshold %d%%)", server, percent, threshold), 200),
+		}
+		payload, err := msg.encode()
+		if err != nil {
+			return fmt.Errorf("encode Redis alert: %w", err)
+		}
+		id, err := n.store.InsertNotification(ctx, store.Notification{
+			ChannelID: c.ID, Trigger: store.TriggerThreshold, Subject: msg.Subject, Payload: payload,
+		})
+		if err != nil {
+			return fmt.Errorf("record Redis alert for channel %d: %w", c.ID, err)
+		}
+		n.raised.Add(1)
+		n.enqueue(id)
+	}
+	return nil
+}
+
 // Retry makes a failed delivery pending again and queues it.
 func (n *Notifier) Retry(ctx context.Context, id int64) error {
 	if err := n.store.RequeueNotification(ctx, id); err != nil {

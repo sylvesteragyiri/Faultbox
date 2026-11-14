@@ -17,21 +17,24 @@ import (
 	"github.com/sylvesteragyiri/faultbox/internal/dashboard"
 	"github.com/sylvesteragyiri/faultbox/internal/ingest"
 	"github.com/sylvesteragyiri/faultbox/internal/notify"
+	"github.com/sylvesteragyiri/faultbox/internal/redismon"
 	"github.com/sylvesteragyiri/faultbox/internal/server"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
 
 // App is a configured Faultbox instance.
 type App struct {
-	cfg       config.Config
-	logger    *slog.Logger
-	store     *store.Store
-	queue     *ingest.Queue
-	metrics   *ingest.Metrics
-	processor *ingest.Processor
-	notifier  *notify.Notifier
-	handler   http.Handler
-	closed    bool
+	cfg         config.Config
+	logger      *slog.Logger
+	store       *store.Store
+	queue       *ingest.Queue
+	metrics     *ingest.Metrics
+	processor   *ingest.Processor
+	notifier    *notify.Notifier
+	redisCancel context.CancelFunc
+	redisDone   chan struct{}
+	handler     http.Handler
+	closed      bool
 }
 
 // New opens the database, applies migrations, creates the bootstrap admin
@@ -112,6 +115,14 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		return nil, err
 	}
 	a.processor.Start()
+	collector := redismon.New(st, keys.Encryption, cfg.RetentionDays, logger)
+	collector.SetAlertSender(a.notifier)
+	redisCtx, redisCancel := context.WithCancel(context.Background())
+	a.redisCancel, a.redisDone = redisCancel, make(chan struct{})
+	go func() {
+		defer close(a.redisDone)
+		collector.Run(redisCtx)
+	}()
 	return a, nil
 }
 
@@ -147,10 +158,22 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 	a.closed = true
 	drainErr := a.processor.Shutdown(ctx)
+	var redisErr error
+	if a.redisCancel != nil {
+		a.redisCancel()
+		select {
+		case <-a.redisDone:
+		case <-ctx.Done():
+			// Cancellation closes any active Redis socket. Wait for the collector
+			// to leave its database operation before closing the store.
+			<-a.redisDone
+			redisErr = ctx.Err()
+		}
+	}
 	// After the processor: alerts for the last stored events are recorded
 	// first. Anything not yet delivered stays pending for the next start.
 	notifyErr := a.notifier.Shutdown(ctx)
-	return errors.Join(drainErr, notifyErr, a.store.Close())
+	return errors.Join(drainErr, redisErr, notifyErr, a.store.Close())
 }
 
 // Close is Shutdown with the configured drain timeout.

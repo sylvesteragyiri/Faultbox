@@ -127,6 +127,10 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /mail", h.mail)
 	authed.HandleFunc("GET /commands", h.commands)
 	authed.HandleFunc("GET /cache", h.cache)
+	authed.HandleFunc("GET /redis", h.redisPage)
+	authed.HandleFunc("POST /redis", h.redisSave)
+	authed.HandleFunc("POST /redis/{id}", h.redisSave)
+	authed.HandleFunc("POST /redis/{id}/delete", h.redisDelete)
 	authed.HandleFunc("GET /notifications", h.notificationsPage)
 	authed.HandleFunc("GET /notifications/channels/new", h.channelNew)
 	authed.HandleFunc("POST /notifications/channels", h.channelCreate)
@@ -162,7 +166,7 @@ func cacheStatic(next http.Handler) http.Handler {
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
 	"settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job",
-	"notifications", "notification_channel", "notification_secret", "deliveries", "commands", "cache", "requests", "jobs",
+	"notifications", "notification_channel", "notification_secret", "deliveries", "commands", "cache", "redis", "requests", "jobs",
 }
 
 // assetURL returns a function mapping a static path to its URL with a
@@ -204,6 +208,7 @@ func (h *Handler) parseTemplates() error {
 		"isoTime": func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"join":    strings.Join,
 		"bytes":   humanBytes,
+		"uptime":  func(seconds int64) string { return durationText(seconds * 1000) },
 		"compact": compact,
 		"add":     func(a, b int) int { return a + b },
 		"sub":     func(a, b int) int { return a - b },
