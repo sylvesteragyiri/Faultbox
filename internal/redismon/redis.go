@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -15,12 +16,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sylvesteragyiri/faultbox/internal/auth"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
 
+// Interval is the time between checks; DialTimeout bounds each connection.
 const (
 	Interval    = 5 * time.Minute
 	DialTimeout = 3 * time.Second
@@ -41,6 +46,8 @@ type Collector struct {
 	now func() time.Time
 }
 
+// New returns a collector that unseals endpoints with key. A non-positive
+// retentionDays falls back to 30 days.
 func New(st *store.Store, key []byte, retentionDays int, logger interface{ Error(string, ...any) }) *Collector {
 	if retentionDays < 1 {
 		retentionDays = 30
@@ -122,17 +129,21 @@ func (c *Collector) Poll(ctx context.Context) error {
 func (c *Collector) pollTarget(ctx context.Context, target store.RedisTarget) error {
 	plain, err := auth.Unseal(c.key, target.Endpoint)
 	var sample store.RedisSample
-	checkErr := ""
-	if err == nil {
+	if err != nil {
+		err = errors.New("the saved Redis URL could not be decrypted; FAULTBOX_SECRET may have changed, so enter the URL again")
+	} else {
 		sample, err = ReadInfo(ctx, string(plain))
 	}
+	// The target ID is needed on failure too: RecordRedisCheck uses it to
+	// store the failure reason and check time.
+	sample.TargetID, sample.TargetName = target.ID, target.Name
+	checkErr := ""
 	if err != nil {
-		checkErr = "Redis check failed: " + safeError(err)
+		checkErr = Reason(err)
 		if c.logger != nil {
 			c.logger.Error("Redis monitoring check failed", "target_id", target.ID, "error", checkErr)
 		}
 	} else {
-		sample.TargetID, sample.TargetName = target.ID, target.Name
 		sample.SampledAt = c.now().UTC()
 	}
 	var previous store.RedisSample
@@ -147,19 +158,33 @@ func (c *Collector) pollTarget(ctx context.Context, target store.RedisTarget) er
 		return fmt.Errorf("record Redis target %d check: %w", target.ID, dbErr)
 	}
 	if err != nil {
-		return fmt.Errorf("Redis target %d: %w", target.ID, err)
+		return fmt.Errorf("redis target %d: %w", target.ID, err)
 	}
 	if target.AlertEnabled && c.alerts != nil && sample.MaxMemory > 0 {
-		for _, threshold := range []int64{80, 90, 100} {
-			if memoryPercent(previous.UsedMemory, previous.MaxMemory) < threshold && memoryPercent(sample.UsedMemory, sample.MaxMemory) >= threshold {
-				pct := memoryPercent(sample.UsedMemory, sample.MaxMemory)
-				if alertErr := c.alerts.RedisMemoryAlert(ctx, target.Name, sample.UsedMemory, sample.MaxMemory, pct, threshold); alertErr != nil {
-					return fmt.Errorf("queue Redis alert for target %d at %d%%: %w", target.ID, threshold, alertErr)
-				}
+		pct := memoryPercent(sample.UsedMemory, sample.MaxMemory)
+		if threshold := crossedThreshold(memoryPercent(previous.UsedMemory, previous.MaxMemory), pct); threshold > 0 {
+			if alertErr := c.alerts.RedisMemoryAlert(ctx, target.Name, sample.UsedMemory, sample.MaxMemory, pct, threshold); alertErr != nil {
+				return fmt.Errorf("queue Redis alert for target %d at %d%%: %w", target.ID, threshold, alertErr)
 			}
 		}
 	}
 	return nil
+}
+
+// AlertThresholds are the memory percentages that raise an alert when a
+// check moves from below to at-or-above them.
+var AlertThresholds = []int64{80, 90, 100}
+
+// crossedThreshold returns the highest threshold crossed between two checks,
+// or 0. A jump from 70% to 100% sends one alert for 100%, not three.
+func crossedThreshold(previous, current int64) int64 {
+	crossed := int64(0)
+	for _, threshold := range AlertThresholds {
+		if previous < threshold && current >= threshold {
+			crossed = threshold
+		}
+	}
+	return crossed
 }
 
 func memoryPercent(used, maximum int64) int64 {
@@ -169,12 +194,24 @@ func memoryPercent(used, maximum int64) int64 {
 	return int64(float64(used) * 100 / float64(maximum))
 }
 
-func safeError(err error) string {
-	// Network and Redis errors may include hostnames or server-supplied data.
-	// Keep only a short, single-line reason in the database and logs.
+// Reason turns a check error into a short, single-line sentence suitable for
+// the dashboard, logs, and the stored last error. ReadInfo errors are already
+// fixed strings; this also bounds anything else that reaches it.
+func Reason(err error) string {
+	if err == nil {
+		return ""
+	}
 	s := strings.Join(strings.Fields(err.Error()), " ")
 	if len(s) > 180 {
-		s = s[:180]
+		s = strings.ToValidUTF8(s[:180], "")
+	}
+	if s == "" {
+		return "Redis check failed."
+	}
+	first, size := utf8.DecodeRuneInString(s)
+	s = string(unicode.ToUpper(first)) + s[size:]
+	if !strings.HasSuffix(s, ".") {
+		s += "."
 	}
 	return s
 }
@@ -199,7 +236,7 @@ func ReadInfo(ctx context.Context, endpoint string) (store.RedisSample, error) {
 		conn, err = dialer.DialContext(ctx, "tcp", address)
 	}
 	if err != nil {
-		return store.RedisSample{}, errors.New("could not connect to Redis")
+		return store.RedisSample{}, dialError(err)
 	}
 	defer func() { _ = conn.Close() }()
 	stopClose := context.AfterFunc(ctx, func() { _ = conn.Close() })
@@ -216,22 +253,131 @@ func ReadInfo(ctx context.Context, endpoint string) (store.RedisSample, error) {
 			reply, err = command(r, w, "AUTH", password)
 		}
 		if err != nil || reply != "OK" {
-			return store.RedisSample{}, errors.New("Redis authentication failed")
+			return store.RedisSample{}, authError(err)
 		}
 	}
 	if db := strings.TrimPrefix(u.Path, "/"); db != "" && db != "0" {
 		if n, err := strconv.Atoi(db); err != nil || n < 0 {
-			return store.RedisSample{}, errors.New("Redis database path must be a number")
+			return store.RedisSample{}, errors.New("redis database path must be a number")
 		}
 		if _, err := command(r, w, "SELECT", db); err != nil {
-			return store.RedisSample{}, errors.New("Redis database selection failed")
+			return store.RedisSample{}, commandError(err, "SELECT", "redis database selection failed")
 		}
 	}
 	info, err := command(r, w, "INFO")
 	if err != nil {
-		return store.RedisSample{}, err
+		return store.RedisSample{}, commandError(err, "INFO", "redis INFO failed")
 	}
 	return parseInfo(info)
+}
+
+// replyError is a Redis error reply. Its Error text is fixed because the
+// server's message may echo user data; callers map Code to a safe reason.
+type replyError struct{ Code, Message string }
+
+func (e *replyError) Error() string { return "Redis returned an error" }
+
+// protocolError is a fixed, already-safe description of a malformed reply.
+type protocolError string
+
+func (e protocolError) Error() string { return string(e) }
+
+// Failure reasons are fixed strings so stored errors and logs never carry
+// hostnames, addresses, credentials, or server-supplied text.
+var (
+	errTimeout = errors.New("redis did not respond in time")
+	errClosed  = errors.New("redis closed the connection")
+)
+
+func dialError(err error) error {
+	var dnsErr *net.DNSError
+	var unknownCA x509.UnknownAuthorityError
+	var hostErr x509.HostnameError
+	var invalidCert x509.CertificateInvalidError
+	var verifyErr *tls.CertificateVerificationError
+	var recordErr tls.RecordHeaderError
+	switch {
+	case errors.As(err, &dnsErr):
+		return errors.New("redis host name could not be resolved")
+	case isTimeout(err):
+		return errors.New("connection to Redis timed out")
+	case isRefused(err):
+		return errors.New("redis refused the connection; check the host and port")
+	case errors.As(err, &verifyErr), errors.As(err, &unknownCA), errors.As(err, &hostErr), errors.As(err, &invalidCert):
+		return errors.New("redis TLS certificate could not be verified")
+	case errors.As(err, &recordErr):
+		return errors.New("redis did not answer with TLS; use redis:// for plain connections")
+	case errors.Is(err, io.EOF), isReset(err):
+		return errors.New("redis closed the connection during the TLS handshake")
+	}
+	return errors.New("could not connect to Redis")
+}
+
+func authError(err error) error {
+	var reply *replyError
+	if errors.As(err, &reply) {
+		if strings.Contains(strings.ToLower(reply.Message), "without any password configured") {
+			return errors.New("redis has no password set; remove the password from the URL")
+		}
+		return errors.New("redis rejected the username or password")
+	}
+	if err == nil {
+		return errors.New("redis authentication failed")
+	}
+	return transportError(err)
+}
+
+func commandError(err error, name, fallback string) error {
+	var reply *replyError
+	if errors.As(err, &reply) {
+		switch reply.Code {
+		case "NOAUTH":
+			return errors.New("redis requires a password; add it to the URL")
+		case "WRONGPASS":
+			return errors.New("redis rejected the username or password")
+		case "NOPERM":
+			return fmt.Errorf("the Redis user is not allowed to run %s", name)
+		case "LOADING":
+			return errors.New("redis is still loading its dataset")
+		}
+		if name == "SELECT" && strings.Contains(strings.ToLower(reply.Message), "out of range") {
+			return errors.New("redis database number is out of range")
+		}
+		return errors.New(fallback)
+	}
+	return transportError(err)
+}
+
+func transportError(err error) error {
+	var proto protocolError
+	switch {
+	case errors.As(err, &proto):
+		return proto
+	case isTimeout(err):
+		return errTimeout
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF), isReset(err):
+		return errClosed
+	}
+	return errors.New("redis connection failed")
+}
+
+func isTimeout(err error) bool {
+	var netErr net.Error
+	return errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout())
+}
+
+// Windows reports socket errors as WSA codes rather than POSIX errno values.
+const (
+	wsaConnReset   syscall.Errno = 10054
+	wsaConnRefused syscall.Errno = 10061
+)
+
+func isRefused(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, wsaConnRefused)
+}
+
+func isReset(err error) bool {
+	return errors.Is(err, syscall.ECONNRESET) || errors.Is(err, wsaConnReset)
 }
 
 func command(r *bufio.Reader, w *bufio.Writer, args ...string) (string, error) {
@@ -251,28 +397,29 @@ func command(r *bufio.Reader, w *bufio.Writer, args ...string) (string, error) {
 		return "", err
 	}
 	if len(line) < 3 {
-		return "", errors.New("invalid Redis response")
+		return "", protocolError("invalid Redis response")
 	}
 	switch line[0] {
 	case '+':
 		return strings.TrimSuffix(strings.TrimSuffix(line[1:], "\n"), "\r"), nil
 	case '-':
-		return "", errors.New("Redis returned an error")
+		code, message, _ := strings.Cut(strings.TrimSpace(line[1:]), " ")
+		return "", &replyError{Code: code, Message: message}
 	case '$':
 		n, err := strconv.Atoi(strings.TrimSpace(line[1:]))
 		if err != nil || n < 0 || n > readLimit {
-			return "", errors.New("Redis INFO response exceeds limit")
+			return "", protocolError("redis INFO response exceeds limit")
 		}
 		b := make([]byte, n+2)
 		if _, err := io.ReadFull(r, b); err != nil {
 			return "", err
 		}
 		if b[n] != '\r' || b[n+1] != '\n' {
-			return "", errors.New("invalid Redis bulk response")
+			return "", protocolError("invalid Redis bulk response")
 		}
 		return string(b[:n]), nil
 	default:
-		return "", errors.New("unexpected Redis response type")
+		return "", protocolError("unexpected Redis response; if the server requires TLS, use rediss://")
 	}
 }
 
@@ -287,11 +434,11 @@ func parseInfo(raw string) (store.RedisSample, error) {
 	read := func(key string) (int64, error) {
 		v, ok := values[key]
 		if !ok {
-			return 0, fmt.Errorf("Redis INFO is missing %s", key)
+			return 0, fmt.Errorf("redis INFO is missing %s", key)
 		}
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 0 {
-			return 0, fmt.Errorf("Redis INFO has invalid %s", key)
+			return 0, fmt.Errorf("redis INFO has invalid %s", key)
 		}
 		return n, nil
 	}
@@ -320,7 +467,7 @@ func parseInfo(raw string) (store.RedisSample, error) {
 			}
 			n, e := strconv.ParseInt(v, 10, 64)
 			if e != nil || n < 0 {
-				return s, errors.New("Redis INFO has invalid key count")
+				return s, errors.New("redis INFO has invalid key count")
 			}
 			s.KeyCount += n
 		}

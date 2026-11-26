@@ -31,8 +31,12 @@ func TestRedisTargetSamplesAndRetention(t *testing.T) {
 	if err := st.RecordRedisCheck(ctx, sample, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.RecordRedisCheck(ctx, sample, "Redis check failed: unavailable"); err != nil {
+	if err := st.RecordRedisCheck(ctx, sample, "Redis did not respond in time."); err != nil {
 		t.Fatal(err)
+	}
+	// A failed check for a target that no longer exists must not pass silently.
+	if err := st.RecordRedisCheck(ctx, store.RedisSample{TargetID: id + 100}, "Redis did not respond in time."); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("record check for missing target error = %v", err)
 	}
 	latest, err := st.LatestRedisSample(ctx, id)
 	if err != nil || latest.UsedMemory != 80 || !latest.SampledAt.Equal(at.Truncate(time.Millisecond)) {

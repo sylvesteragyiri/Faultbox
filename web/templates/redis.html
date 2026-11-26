@@ -1,75 +1,59 @@
 {{define "content"}}
 {{with .Data}}
 <header class="page-head">
-  <div><h1>Redis</h1><p class="page-sub">Monitor Redis memory and capacity. Each configured server is checked every five minutes; samples follow the {{.RetentionDays}} day data retention setting.</p></div>
+  <div>
+    <h1>Redis</h1>
+    <p class="page-sub">Memory and capacity across your Redis servers. Each monitored server is checked every five minutes. Faultbox reads summary statistics only, never keys or values.</p>
+  </div>
+  {{if .Rows}}<a class="btn btn-primary" href="/redis/new">Add Redis server</a>{{end}}
 </header>
 
-<section class="card">
-  <div class="section-head"><h2>Add a Redis server</h2></div>
-  <form method="post" action="/redis" class="form-grid">
-    {{template "csrf" $.CSRF}}
-    <label>Name<input name="name" maxlength="100" required placeholder="Production cache"></label>
-    <label>Redis URL<input name="endpoint" type="password" autocomplete="new-password" required placeholder="redis://:password@redis:6379/0" aria-describedby="redis-url-help"></label>
-    <p id="redis-url-help" class="muted small">Use <code>rediss://</code> for TLS. The URL is encrypted and never shown again.</p>
-    <label class="check"><input type="checkbox" name="enabled" value="1" checked> Monitor this server</label>
-    <label class="check"><input type="checkbox" name="alert_enabled" value="1"> Send memory threshold alerts</label>
-    <div><button class="button button-primary" type="submit">Add server</button></div>
-  </form>
+{{if .Rows}}
+<section class="stats" aria-label="Summary">
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "database"}}</span><span class="stat-label">Servers</span><span class="stat-value">{{.Summary.Total}}</span><span class="stat-note">{{if .Summary.Paused}}{{.Summary.Paused}} paused{{else}}All monitored{{end}}</span></div>
+  <div class="stat card"><span class="stat-icon tone-ok">{{template "icon" "check"}}</span><span class="stat-label">Healthy</span><span class="stat-value">{{.Summary.Healthy}}</span><span class="stat-note">Last check succeeded</span></div>
+  <div class="stat card"><span class="stat-icon tone-danger">{{template "icon" "issues"}}</span><span class="stat-label">Failing</span><span class="stat-value">{{.Summary.Failing}}</span><span class="stat-note">{{if .Summary.Failing}}Last check could not read INFO{{else}}No failed checks{{end}}</span></div>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "activity"}}</span><span class="stat-label">Memory in use</span><span class="stat-value">{{bytes .Summary.UsedMemory}}</span><span class="stat-note">Across monitored servers</span></div>
 </section>
 
-{{if .Statuses}}
 <section class="card table-wrap">
-  <div class="section-head table-title"><h2>Configured servers</h2></div>
-  <table>
-    <thead><tr><th>Name</th><th>Memory</th><th>Clients</th><th>Keys</th><th>Uptime</th><th>Last check</th><th>Alerts</th></tr></thead>
-    <tbody>{{range .Statuses}}
+  <div class="section-head table-title"><h2>Servers</h2></div>
+  <table class="redis-table">
+    <thead><tr><th>Server</th><th>Status</th><th>Memory</th><th class="num hide-sm">Clients</th><th class="num hide-sm">Keys</th><th class="hide-sm">Uptime</th><th>Last check</th><th class="hide-sm">Alerts</th></tr></thead>
+    <tbody>{{range .Rows}}
       <tr>
-        <td><a href="/redis?target={{.Target.ID}}"><strong>{{.Target.Name}}</strong></a>{{if not .Target.Enabled}}<div class="muted small">Monitoring paused</div>{{end}}</td>
-        <td>{{if .Latest}}{{bytes .Latest.UsedMemory}}{{if .Latest.MaxMemory}} / {{bytes .Latest.MaxMemory}} <span class="muted">({{percent .Latest.UsedMemory .Latest.MaxMemory}}%)</span>{{end}}{{else}}<span class="muted">No sample yet</span>{{end}}</td>
-        <td>{{if .Latest}}{{compact .Latest.ConnectedClients}}{{else}}—{{end}}</td>
-        <td>{{if .Latest}}{{compact .Latest.KeyCount}}{{else}}—{{end}}</td>
-        <td>{{if .Latest}}{{uptime .Latest.UptimeSeconds}}{{else}}—{{end}}</td>
-        <td>{{if .Target.LastError}}<strong class="error-text">Check failed</strong><div class="muted small">{{.Target.LastError}}</div>{{else if .Target.LastChecked.IsZero}}<span class="muted">Waiting</span>{{else}}<time datetime="{{isoTime .Target.LastChecked}}" title="{{datetime .Target.LastChecked}}">{{timeago .Target.LastChecked}}</time>{{end}}</td>
-        <td>{{if .Target.AlertEnabled}}On{{else}}Off{{end}}</td>
+        <td><a class="issue-title" href="/redis/{{.Target.ID}}">{{.Target.Name}}</a></td>
+        <td><span class="{{.State.Badge}}">{{.State.Label}}</span></td>
+        <td class="redis-memory-cell">
+          {{if .Latest}}
+            {{if .Latest.MaxMemory}}{{$pct := percent .Latest.UsedMemory .Latest.MaxMemory}}
+              <div class="redis-memory-text"><span>{{bytes .Latest.UsedMemory}} <span class="muted">/ {{bytes .Latest.MaxMemory}}</span></span><strong class="{{if ge $pct 90}}error-text{{else if ge $pct 80}}warn-text{{end}}">{{$pct}}%</strong></div>
+              {{template "redis_meter" $pct}}
+            {{else}}
+              {{bytes .Latest.UsedMemory}} <span class="muted small">No limit</span>
+            {{end}}
+          {{else}}<span class="muted">No sample yet</span>{{end}}
+        </td>
+        <td class="num hide-sm">{{if .Latest}}{{compact .Latest.ConnectedClients}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="num hide-sm">{{if .Latest}}{{compact .Latest.KeyCount}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="hide-sm nowrap">{{if .Latest}}{{uptime .Latest.UptimeSeconds}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td>
+          {{if .Target.LastChecked.IsZero}}<span class="muted">{{if .Target.Enabled}}Waiting for first check{{else}}Never checked{{end}}</span>
+          {{else}}<time datetime="{{isoTime .Target.LastChecked}}" title="{{datetime .Target.LastChecked}}" class="nowrap">{{timeago .Target.LastChecked}}</time>{{end}}
+          {{if .Target.LastError}}<div class="error-text small">{{.Target.LastError}}</div>{{end}}
+        </td>
+        <td class="hide-sm">{{if .Target.AlertEnabled}}On{{else}}<span class="muted">Off</span>{{end}}</td>
       </tr>
     {{end}}</tbody>
   </table>
 </section>
-
-{{if .Selected}}
-<section class="card">
-  <div class="section-head"><h2>{{.Selected.Target.Name}} memory history</h2><span class="muted small">Last {{.RetentionDays}} days</span></div>
-  {{if .Plot.Empty}}
-    <p class="muted">Memory history will appear after the first successful Redis check.</p>
-  {{else}}
-    <div class="chart-wrap">
-      <svg viewBox="0 0 720 190" role="img" aria-label="Redis memory use over time">
-        <line x1="8" y1="8" x2="712" y2="8" class="chart-grid"/><text x="0" y="14" class="chart-label">{{.Plot.MaxLabel}}</text>
-        <line x1="8" y1="94" x2="712" y2="94" class="chart-grid"/><text x="0" y="90" class="chart-label">{{.Plot.MidLabel}}</text>
-        <polyline points="{{.Plot.Points}}" class="redis-memory-line" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke"/>
-      </svg>
-      <p class="muted small">Memory used over time. The vertical scale runs from zero to {{.Plot.MaxLabel}} for this history range.</p>
-    </div>
-  {{end}}
-</section>
-
-<section class="card">
-  <div class="section-head"><h2>Settings</h2></div>
-  <form method="post" action="/redis/{{.Selected.Target.ID}}" class="form-grid">
-    {{template "csrf" $.CSRF}}
-    <label>Name<input name="name" maxlength="100" required value="{{.Selected.Target.Name}}"></label>
-    <label>Replace Redis URL<input name="endpoint" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved URL"><span class="muted small">The saved URL is encrypted and cannot be viewed.</span></label>
-    <label class="check"><input type="checkbox" name="enabled" value="1" {{if .Selected.Target.Enabled}}checked{{end}}> Monitor this server</label>
-    <label class="check"><input type="checkbox" name="alert_enabled" value="1" {{if .Selected.Target.AlertEnabled}}checked{{end}}> Send alerts at 80%, 90%, and 100%</label>
-    <div><button class="button button-primary" type="submit">Save settings</button></div>
-  </form>
-  <form method="post" action="/redis/{{.Selected.Target.ID}}/delete" class="section-actions" data-confirm="Delete this Redis server and its history?">
-    {{template "csrf" $.CSRF}}<button class="button button-danger" type="submit">Delete server</button>
-  </form>
-</section>
-{{end}}
 {{else}}
-<section class="card empty"><span class="badge">Nothing yet</span><h2>Add a Redis server to begin</h2><p class="muted">Faultbox reads summary statistics only. It never reads Redis keys or values.</p></section>
+<section class="card empty">
+  <span class="badge">Nothing yet</span>
+  <h2>Add a Redis server to begin</h2>
+  <p class="muted">Faultbox connects every five minutes, reads Redis INFO, and charts memory against your <code>maxmemory</code> limit. It never reads keys or values.</p>
+  <a class="btn btn-primary" href="/redis/new">Add Redis server</a>
+</section>
 {{end}}
 {{end}}
 {{end}}

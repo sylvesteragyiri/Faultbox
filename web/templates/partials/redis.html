@@ -1,0 +1,39 @@
+{{/* Shared Redis server form fields. Expects dict "Form" (redisForm), "New" (bool), "Thresholds". */}}
+{{define "redis_fields"}}
+{{$f := .Form}}
+<label>Server name
+  <input type="text" name="name" value="{{$f.Name}}" maxlength="100" required placeholder="Production cache" autocomplete="off">
+  <span class="hint">Shown in the dashboard and in alert messages.</span>
+</label>
+<label>{{if .New}}Redis URL{{else}}Replace Redis URL{{end}}
+  <input type="password" name="endpoint" autocomplete="new-password" spellcheck="false" {{if .New}}required placeholder="redis://:password@redis:6379/0"{{else}}placeholder="Saved. Leave blank to keep it"{{end}}>
+  <span class="hint">{{if .New}}Use <code>rediss://</code> for TLS. The URL is encrypted with a key derived from FAULTBOX_SECRET and never shown again.{{else}}The saved URL is encrypted and can't be viewed. Test connection uses the saved URL when this is blank.{{end}}</span>
+</label>
+<div id="redis-test-result" class="redis-test-slot" aria-live="polite"></div>
+<fieldset>
+  <legend>Monitoring</legend>
+  <label class="check"><input type="checkbox" name="enabled" value="1" {{if $f.Enabled}}checked{{end}}> Check this server every five minutes</label>
+  <label class="check"><input type="checkbox" name="alert_enabled" value="1" {{if $f.AlertEnabled}}checked{{end}}> Alert when memory use crosses {{range $i, $t := .Thresholds}}{{if $i}}, {{end}}{{$t}}%{{end}} of maxmemory</label>
+  <span class="hint">Alerts go to every enabled channel on the <a href="/notifications">Alerts</a> page. A check that jumps past several thresholds sends one alert for the highest.</span>
+</fieldset>
+{{end}}
+
+{{define "redis_help"}}
+<section class="card">
+  <h2>Connection URL</h2>
+  <ul class="plain-list small">
+    <li><code>redis://redis:6379</code> for a server without a password.</li>
+    <li><code>redis://:password@redis:6379/0</code> for a password and database number.</li>
+    <li><code>redis://user:password@redis:6379</code> for a Redis 6+ ACL user.</li>
+    <li><code>rediss://…</code> for TLS. The certificate must be valid for the host name.</li>
+  </ul>
+</section>
+<section class="card">
+  <h2>What Faultbox reads</h2>
+  <ul class="plain-list small">
+    <li>One <code>INFO</code> command per check: memory used, maxmemory, connected clients, keys per database, and uptime.</li>
+    <li>It never reads keys or values. An ACL user only needs <code>+info</code> (and <code>+select</code> for a non-zero database).</li>
+    <li>Faultbox must be able to reach the server from its own host or container network.</li>
+  </ul>
+</section>
+{{end}}

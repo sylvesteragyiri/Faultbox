@@ -1,0 +1,68 @@
+{{define "content"}}
+{{with .Data}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/redis">Redis</a> /</p>
+    <h1>{{.Target.Name}} <span class="{{.State.Badge}}">{{.State.Label}}</span></h1>
+    <p class="page-sub">
+      {{if .Target.LastChecked.IsZero}}{{if .Target.Enabled}}Waiting for the first check. Monitored servers are checked every five minutes.{{else}}Monitoring is paused and this server hasn't been checked.{{end}}
+      {{else}}Last checked <time datetime="{{isoTime .Target.LastChecked}}" title="{{datetime .Target.LastChecked}}">{{timeago .Target.LastChecked}}</time>.{{if not .Target.Enabled}} Monitoring is paused.{{end}}{{end}}
+    </p>
+  </div>
+</header>
+
+{{if .Target.LastError}}
+<div class="alert alert-error" role="status"><strong>Last check failed.</strong> {{.Target.LastError}}{{if .Latest}} The figures below are from the last successful check, <time datetime="{{isoTime .Latest.SampledAt}}" title="{{datetime .Latest.SampledAt}}">{{timeago .Latest.SampledAt}}</time>.{{end}}</div>
+{{end}}
+
+{{if .Latest}}
+<section class="stats" aria-label="Latest check">
+  <div class="stat card">
+    <span class="stat-icon tone-info">{{template "icon" "database"}}</span>
+    <span class="stat-label">Memory used</span>
+    <span class="stat-value">{{bytes .Latest.UsedMemory}}</span>
+    {{if .Latest.MaxMemory}}{{$pct := percent .Latest.UsedMemory .Latest.MaxMemory}}
+      <span class="stat-note"><strong class="{{if ge $pct 90}}error-text{{else if ge $pct 80}}warn-text{{end}}">{{$pct}}%</strong> of {{bytes .Latest.MaxMemory}} maxmemory</span>
+      {{template "redis_meter" $pct}}
+    {{else}}<span class="stat-note">No maxmemory limit set</span>{{end}}
+  </div>
+  <div class="stat card"><span class="stat-icon tone-ok">{{template "icon" "activity"}}</span><span class="stat-label">Connected clients</span><span class="stat-value">{{compact .Latest.ConnectedClients}}</span><span class="stat-note">At the last successful check</span></div>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "search"}}</span><span class="stat-label">Keys</span><span class="stat-value">{{compact .Latest.KeyCount}}</span><span class="stat-note">Across all databases</span></div>
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "check"}}</span><span class="stat-label">Uptime</span><span class="stat-value stat-sm">{{uptime .Latest.UptimeSeconds}}</span><span class="stat-note">Sampled <time datetime="{{isoTime .Latest.SampledAt}}" title="{{datetime .Latest.SampledAt}}">{{timeago .Latest.SampledAt}}</time></span></div>
+</section>
+{{end}}
+
+<section class="card">
+  <div class="section-head"><h2>Memory history</h2><span class="muted small">Last {{.RetentionDays}} days</span></div>
+  {{if .Plot.Empty}}
+    <p class="muted">Memory history appears after the first successful check.{{if not .Target.Enabled}} Turn on monitoring below to start collecting it.{{end}}</p>
+  {{else}}
+    {{template "redis_memory_chart" .Plot}}
+  {{end}}
+</section>
+
+<div class="grid-2 grid-wide-left">
+  <form class="card stack" method="post" action="/redis/{{.Target.ID}}">
+    <h2>Settings</h2>
+    {{template "csrf" $.CSRF}}
+    {{template "form_error" .Form.Error}}
+    {{template "redis_fields" (dict "Form" .Form "New" false "Thresholds" .Thresholds)}}
+    <div class="row">
+      <button class="btn btn-primary" type="submit">Save settings</button>
+      <button class="btn" type="submit" formaction="/redis/{{.Target.ID}}/test" hx-post="/redis/{{.Target.ID}}/test" hx-include="closest form" hx-target="#redis-test-result" hx-swap="innerHTML">Test connection</button>
+    </div>
+  </form>
+
+  <div class="stack">
+    {{template "redis_help"}}
+    <section class="card danger-zone">
+      <h2>Delete server</h2>
+      <p class="small muted">Stops monitoring and removes this server's memory history. Alerts already sent are kept.</p>
+      <form method="post" action="/redis/{{.Target.ID}}/delete" data-confirm="Delete this Redis server and its memory history?">
+        {{template "csrf" $.CSRF}}<button class="btn btn-danger" type="submit">Delete server</button>
+      </form>
+    </section>
+  </div>
+</div>
+{{end}}
+{{end}}

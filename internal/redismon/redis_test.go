@@ -38,7 +38,7 @@ func TestParseInfoRejectsMissingAndInvalidMetrics(t *testing.T) {
 }
 
 func TestReadInfoUsesRedisRESPAndParsesMetrics(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestCollectorAlertsOnCrossingsOnceAndRearmsAfterDrop(t *testing.T) {
 
 func startInfoServer(t *testing.T, values <-chan int64) net.Listener {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}

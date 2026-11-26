@@ -1,0 +1,31 @@
+{{define "content"}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/redis">Redis</a> / <a href="{{.Data.BackURL}}">{{if .Data.TargetName}}{{.Data.TargetName}}{{else}}Add Redis server{{end}}</a> /</p>
+    <h1>Connection test</h1>
+    <p class="page-sub">A test does not save the server or add a history sample.</p>
+  </div>
+</header>
+<section class="card">
+  {{template "result" .}}
+  <div class="row"><a class="btn" href="{{.Data.BackURL}}">Back</a></div>
+</section>
+{{end}}
+
+{{define "result"}}
+{{with .Data}}
+<div class="redis-test-result">
+{{if .Failure}}
+  <div class="alert alert-error" role="alert"><strong>Connection failed.</strong> {{.Failure}}{{if .UsedSaved}} This test used the saved URL.{{end}} A test does not save the server.</div>
+{{else}}
+  <div class="alert alert-ok" role="status"><strong>Connection successful.</strong> Faultbox connected and read Redis INFO{{if .UsedSaved}} using the saved URL{{end}}. Nothing is saved until you submit the form.</div>
+  <dl class="details">
+    <dt>Memory used</dt><dd>{{bytes .Sample.UsedMemory}}{{if .Sample.MaxMemory}} of {{bytes .Sample.MaxMemory}} ({{percent .Sample.UsedMemory .Sample.MaxMemory}}%){{else}} <span class="muted">(no maxmemory limit)</span>{{end}}</dd>
+    <dt>Connected clients</dt><dd>{{compact .Sample.ConnectedClients}}</dd>
+    <dt>Keys</dt><dd>{{compact .Sample.KeyCount}}</dd>
+    <dt>Uptime</dt><dd>{{uptime .Sample.UptimeSeconds}}</dd>
+  </dl>
+{{end}}
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,27 @@
+{{define "content"}}
+{{$f := .Data.Form}}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="/redis">Redis</a> /</p>
+    <h1>Add Redis server</h1>
+    <p class="page-sub">Connect a Redis instance and choose whether it sends memory alerts.</p>
+  </div>
+</header>
+
+<div class="grid-2 grid-wide-left">
+  <form class="card stack" method="post" action="/redis">
+    {{template "csrf" .CSRF}}
+    {{template "form_error" $f.Error}}
+    {{template "redis_fields" (dict "Form" $f "New" true "Thresholds" .Data.Thresholds)}}
+    <div class="row">
+      <button class="btn btn-primary" type="submit">Add Redis server</button>
+      <button class="btn" type="submit" formaction="/redis/test" hx-post="/redis/test" hx-include="closest form" hx-target="#redis-test-result" hx-swap="innerHTML">Test connection</button>
+      <a class="btn btn-ghost" href="/redis">Cancel</a>
+    </div>
+  </form>
+
+  <div class="stack">
+    {{template "redis_help"}}
+  </div>
+</div>
+{{end}}

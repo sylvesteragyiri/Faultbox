@@ -173,8 +173,14 @@ func (s *Store) RecordRedisCheck(ctx context.Context, sample RedisSample, checkE
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE redis_targets SET last_checked_at = ?, last_error = ? WHERE id = ?`, now, checkErr, sample.TargetID); err != nil {
+	res, err := tx.ExecContext(ctx, `UPDATE redis_targets SET last_checked_at = ?, last_error = ? WHERE id = ?`, now, checkErr, sample.TargetID)
+	if err != nil {
 		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrNotFound
 	}
 	return tx.Commit()
 }

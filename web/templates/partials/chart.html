@@ -73,3 +73,32 @@
 </figure>
 {{end}}
 {{end}}
+
+{{/* redis_meter draws a memory-use bar for a 0–100 percent value. */}}
+{{define "redis_meter"}}<svg class="redis-meter{{if ge . 90}} is-danger{{else if ge . 80}} is-warn{{end}}" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6" rx="3"></rect><rect class="fill" width="{{.}}" height="6" rx="3"></rect></svg>{{end}}
+
+{{/* redis_memory_chart draws a dashboard.redisPlot line chart. */}}
+{{define "redis_memory_chart"}}
+<figure class="chart redis-chart">
+  <div class="chart-plot">
+    <svg class="chart-svg" viewBox="0 0 {{.Width}} {{.Height}}" role="img" aria-label="{{.Label}}">
+      <title>{{.Label}}</title>
+      {{range .Ticks}}
+      <line class="grid" x1="{{$.PlotLeft}}" x2="{{$.PlotRight}}" y1="{{.Y}}" y2="{{.Y}}"></line>
+      <text class="tick" x="{{$.TickX}}" y="{{.Y}}" dy="0.32em" text-anchor="end">{{.Label}}</text>
+      {{end}}
+      <line class="baseline" x1="{{.PlotLeft}}" x2="{{.PlotRight}}" y1="{{.PlotBottom}}" y2="{{.PlotBottom}}"></line>
+      <path class="redis-area" d="{{.Area}}"></path>
+      <polyline class="redis-line" points="{{.Line}}"></polyline>
+      <circle class="redis-point" cx="{{.LastX}}" cy="{{.LastY}}" r="3.5"></circle>
+      {{if .HasLimit}}
+      <line class="redis-limit" x1="{{.PlotLeft}}" x2="{{.PlotRight}}" y1="{{.LimitY}}" y2="{{.LimitY}}"></line>
+      <text class="redis-limit-label" x="{{.PlotRight}}" y="{{.LimitY}}" dy="-5" text-anchor="end">maxmemory {{.LimitLabel}}</text>
+      {{end}}
+      <text class="xlabel" x="{{.PlotLeft}}" y="{{.Height}}" dy="-6" text-anchor="start">{{.StartLabel}}</text>
+      <text class="xlabel" x="{{.PlotRight}}" y="{{.Height}}" dy="-6" text-anchor="end">{{.EndLabel}} UTC</text>
+    </svg>
+  </div>
+  <figcaption class="muted small chart-note">Peak {{bytes .Peak}}, latest {{bytes .Latest}}.{{if .LimitOffScale}} The {{.LimitLabel}} maxmemory limit is well above this range, so it is not drawn.{{else if not .MaxMemory}} No maxmemory limit is set, so Redis can grow until the host runs out of memory.{{end}}</figcaption>
+</figure>
+{{end}}
