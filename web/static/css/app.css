@@ -819,9 +819,17 @@ fieldset .check input { flex: none; margin-top: .12rem; }
 .spark-axis { display: flex; justify-content: space-between; font-size: .62rem; font-weight: 550; letter-spacing: .06em; text-transform: uppercase; margin-top: .3rem; }
 .project-spark > p { margin: .9rem 0 .4rem; }
 .project-card-foot { display: flex; align-items: center; gap: 1rem; padding: .6rem 1.15rem; border-top: 1px solid var(--border); background: var(--surface-2); }
-.project-card-foot a { display: inline-flex; align-items: center; gap: .35rem; color: var(--text-2); font-size: .8rem; font-weight: 500; }
-.project-card-foot a .icon { width: 15px; height: 15px; color: var(--muted); }
-.project-card-foot a:hover, .project-card-foot a:hover .icon { color: var(--accent); }
+.project-card-foot a, .project-card-foot .link-button { display: inline-flex; align-items: center; gap: .35rem; color: var(--text-2); font-size: .8rem; font-weight: 500; }
+.project-card-foot a .icon, .project-card-foot .link-button .icon { width: 15px; height: 15px; color: var(--muted); }
+.project-card-foot a:hover, .project-card-foot a:hover .icon,
+.project-card-foot .link-button:hover, .project-card-foot .link-button:hover .icon { color: var(--accent); }
+/* scope_link: a link-looking button that switches the sidebar scope. */
+.scope-link-form { display: inline-flex; margin: 0; }
+.link-button { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.link-button.issue-title { color: var(--text); }
+.link-button.issue-title:hover { color: var(--accent); }
+.link-button.insight { padding: .4rem .75rem .4rem .45rem; border: 1px solid var(--border); background: var(--surface); }
+.link-button.insight:hover { border-color: var(--accent-2); }
 .push-right { margin-left: auto; }
 
 /* ---- insight chips ---- */

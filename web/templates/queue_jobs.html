@@ -19,12 +19,6 @@
     </fieldset>
   </div>
   <div class="pill-row">
-    <label class="pill{{if $f.ProjectSet}} is-set{{end}}"><span class="sr-only">Project</span>
-      <select name="project">
-        <option value="">All projects</option>
-        {{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
-      </select>
-    </label>
     <label class="pill{{if $f.Job}} is-set{{end}}"><span class="sr-only">Job class</span>
       <select name="job">
         <option value="">Any job</option>
@@ -42,12 +36,6 @@
       <select name="connection">
         <option value="">Any connection</option>
         {{range .Data.Facets.Connections}}<option {{if eq $f.Connection .}}selected{{end}}>{{.}}</option>{{end}}
-      </select>
-    </label>
-    <label class="pill{{if $f.EnvSet}} is-set{{end}}"><span class="sr-only">Environment</span>
-      <select name="env">
-        <option value="">Any environment</option>
-        {{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}
       </select>
     </label>
     <label class="pill{{if $f.Range}} is-set{{end}}"><span class="sr-only">Failed</span>

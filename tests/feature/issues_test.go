@@ -83,15 +83,19 @@ func TestIssueListShowsAndFilters(t *testing.T) {
 		t.Fatal("search for NotFound is wrong")
 	}
 
-	staging := a.Get("/issues?env=staging")
-	staging.Body = results(staging.Body)
-	if !contains(staging.Body, "TypeError") || contains(staging.Body, "ModelNotFoundException") {
-		t.Fatal("environment filter is wrong")
-	}
-
 	none := a.Get("/issues?q=no-such-error-anywhere")
 	if !contains(none.Body, "No matching issues") || !contains(none.Body, "Clear filters") {
 		t.Fatal("empty search result has no empty state")
+	}
+
+	// The environment comes from the sidebar switcher, not the URL.
+	setScope(t, a, 0, "staging", "/issues")
+	staging := results(a.Get("/issues").Body)
+	if !contains(staging, "TypeError") || contains(staging, "ModelNotFoundException") {
+		t.Fatal("environment scope is wrong")
+	}
+	if ignored := results(a.Get("/issues?env=production").Body); !contains(ignored, "TypeError") || contains(ignored, "ModelNotFoundException") {
+		t.Fatal("an env URL parameter should not override the switcher")
 	}
 }
 
@@ -269,6 +273,9 @@ func TestIssueToolbarMenusAndBulkSelect(t *testing.T) {
 	a := appWithIssues(t)
 
 	body := a.Get("/issues").Body
+	if contains(body, `class="js-filter" name="project"`) || contains(body, `class="js-filter" name="env"`) {
+		t.Error("project and environment are chosen in the sidebar switcher, not the issue filters")
+	}
 	for _, want := range []string{
 		`id="issue-filters"`, `id="issue-status-menu"`, `<strong>Open</strong>`, // one status dropdown
 		`aria-current="page">Open`, `>Unassigned</a>`, `>Mine</a>`, `>Resolved</a>`, `>Ignored</a>`, `>All status</a>`,
@@ -297,9 +304,9 @@ func TestIssueToolbarMenusAndBulkSelect(t *testing.T) {
 		t.Error("the status menu should name the Mine view")
 	}
 
-	filtered := a.Get("/issues?env=staging&range=7d").Body
+	filtered := a.Get("/issues?type=TypeError&range=7d").Body
 	list := results(filtered)
-	for _, want := range []string{`class="filter-chips"`, `staging`, `7 days`, `href="/issues?range=7d"`, `href="/issues?env=staging"`} {
+	for _, want := range []string{`class="filter-chips"`, `TypeError <span`, `7 days`, `href="/issues?range=7d"`, `href="/issues?type=TypeError"`} {
 		if !contains(list, want) {
 			t.Errorf("filtered list is missing chip markup %q", want)
 		}
@@ -326,7 +333,7 @@ func TestIssueFragmentRefreshesMenusOutOfBand(t *testing.T) {
 	t.Parallel()
 	a := appWithIssues(t)
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, a.Server.URL+"/issues?q=TypeError&env=staging", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, a.Server.URL+"/issues?q=TypeError&range=7d", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +345,7 @@ func TestIssueFragmentRefreshesMenusOutOfBand(t *testing.T) {
 		`id="issue-tabs" class="issue-tabs" aria-label="Issue type" hx-swap-oob="true"`,
 		`id="issue-status-menu" class="menu status-menu" data-menu hx-swap-oob="true"`,
 		`id="issue-filter-count" class="menu-count" hx-swap-oob="true">1<`,
-		`href="/issues?env=staging&amp;q=TypeError&amp;status=resolved"`, // status links keep the new search
+		`href="/issues?q=TypeError&amp;range=7d&amp;status=resolved"`, // status links keep the new search
 	} {
 		if !contains(body, want) {
 			t.Errorf("fragment is missing %q", want)

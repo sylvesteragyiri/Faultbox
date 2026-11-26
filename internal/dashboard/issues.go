@@ -42,10 +42,8 @@ var rangeDurations = map[string]time.Duration{
 func parseIssueForm(r *http.Request) issueForm {
 	q := r.URL.Query()
 	f := issueForm{
-		Project:  q.Get("project"),
 		Status:   q.Get("status"),
 		Category: q.Get("category"),
-		Env:      strings.TrimSpace(q.Get("env")),
 		Release:  strings.TrimSpace(q.Get("release")),
 		Type:     strings.TrimSpace(q.Get("type")),
 		Q:        strings.TrimSpace(q.Get("q")),
@@ -53,15 +51,9 @@ func parseIssueForm(r *http.Request) issueForm {
 		Sort:     q.Get("sort"),
 		Assigned: q.Get("assigned"),
 	}
-	// Without explicit project or env parameters, the switcher's scope
-	// applies; "project=" (All projects) overrides it for this list.
+	// Project and environment come only from the switcher in the sidebar.
 	f.scope = scopeFrom(r)
-	if !q.Has("project") {
-		f.Project = f.scope.Project()
-	}
-	if !q.Has("env") {
-		f.Env = f.scope.Env
-	}
+	f.Project, f.Env = f.scope.Project(), f.scope.Env
 	if f.Assigned != "mine" && f.Assigned != "unassigned" {
 		f.Assigned = ""
 	}
@@ -123,14 +115,7 @@ func (f issueForm) values() url.Values {
 			v.Set(k, val)
 		}
 	}
-	// Project and environment are written only when they differ from the
-	// scope, and then even when empty, so "All projects" sticks.
-	if f.Project != f.scope.Project() {
-		v.Set("project", f.Project)
-	}
-	if f.Env != f.scope.Env {
-		v.Set("env", f.Env)
-	}
+	// Project and environment are the switcher's scope, not URL state.
 	if f.Status != store.IssueUnresolved {
 		v.Set("status", f.Status)
 	}
@@ -153,12 +138,6 @@ func (f issueForm) url() string {
 	}
 	return "/issues"
 }
-
-// ProjectSet reports whether the list's project differs from the scope.
-func (f issueForm) ProjectSet() bool { return f.Project != f.scope.Project() }
-
-// EnvSet reports whether the list's environment differs from the scope.
-func (f issueForm) EnvSet() bool { return f.Env != f.scope.Env }
 
 // ListURL is the current list, filters and page included.
 func (f issueForm) ListURL() string { return f.url() }
@@ -238,30 +217,11 @@ type filterChip struct {
 var rangeLabels = map[string]string{"24h": "24 hours", "7d": "7 days", "30d": "30 days", "90d": "90 days"}
 
 // ActiveFilters lists the filters from the Filters menu that are applied.
-// Search, status and category have their own controls and stay out.
-func (f issueForm) ActiveFilters(projects []store.Project) []filterChip {
+// Search, status and category have their own controls, and project and
+// environment belong to the switcher, so they stay out.
+func (f issueForm) ActiveFilters() []filterChip {
 	f.Page = 1
 	var chips []filterChip
-	if f.ProjectSet() {
-		name := "All projects"
-		for _, p := range projects {
-			if strconv.FormatInt(p.ID, 10) == f.Project {
-				name = p.Name
-			}
-		}
-		g := f
-		g.Project = f.scope.Project()
-		chips = append(chips, filterChip{"Project", name, g.url()})
-	}
-	if f.EnvSet() {
-		name := f.Env
-		if name == "" {
-			name = "Any environment"
-		}
-		g := f
-		g.Env = f.scope.Env
-		chips = append(chips, filterChip{"Environment", name, g.url()})
-	}
 	if f.Release != "" {
 		g := f
 		g.Release = ""
@@ -285,26 +245,18 @@ func (f issueForm) ActiveFilters(projects []store.Project) []filterChip {
 }
 
 // FilterCount is how many filters from the Filters menu are applied.
-func (f issueForm) FilterCount() int {
-	n := 0
-	for _, set := range []bool{f.ProjectSet(), f.EnvSet(), f.Release != "", f.Type != "", f.Range != ""} {
-		if set {
-			n++
-		}
-	}
-	return n
-}
+func (f issueForm) FilterCount() int { return len(f.ActiveFilters()) }
 
 // ClearFiltersURL drops the Filters menu's filters, keeping search, status,
 // category and sort.
 func (f issueForm) ClearFiltersURL() string {
-	f.Project, f.Env, f.Release, f.Type, f.Range, f.Page = f.scope.Project(), f.scope.Env, "", "", "", 1
+	f.Release, f.Type, f.Range, f.Page = "", "", "", 1
 	return f.url()
 }
 
 // Filtered reports whether anything beyond the defaults is applied.
 func (f issueForm) Filtered() bool {
-	return f.ProjectSet() || f.EnvSet() || f.Release != "" || f.Type != "" || f.Q != "" || f.Range != "" ||
+	return f.Release != "" || f.Type != "" || f.Q != "" || f.Range != "" ||
 		f.Status != store.IssueUnresolved || f.Category != store.CategoryErrors || f.Assigned != ""
 }
 

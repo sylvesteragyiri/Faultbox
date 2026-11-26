@@ -47,3 +47,9 @@
   </form>
 </details>
 {{end}}
+
+{{/* scope_link switches the sidebar's project scope and opens Next. The
+     switcher is the only place project and environment are chosen, so links
+     to "this project's issues" go through it. Args: CSRF, Project, Env,
+     Next, Class, Label, and optionally Icon. */}}
+{{define "scope_link"}}<form class="scope-link-form" method="post" action="/scope">{{template "csrf" .CSRF}}<input type="hidden" name="project" value="{{.Project}}"><input type="hidden" name="env" value="{{.Env}}"><input type="hidden" name="next" value="{{.Next}}"><button type="submit" class="link-button {{.Class}}">{{with .Icon}}{{template "icon" .}}{{end}}<span>{{.Label}}</span></button></form>{{end}}

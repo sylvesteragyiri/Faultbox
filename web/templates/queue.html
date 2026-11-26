@@ -6,16 +6,6 @@
     <p class="muted small page-sub">Failed jobs from the last 30 days, kept separate from request exceptions.</p>
   </div>
   <div class="row">
-    {{if .Projects}}
-    <form class="row" method="get" action="/queue-failures">
-      <label class="sr-only" for="queue-project">Project</label>
-      <select id="queue-project" name="project" class="select-sm">
-        <option value="">All projects</option>
-        {{range .Projects}}<option value="{{.ID}}" {{if eq $.Data.ProjectID (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}
-      </select>
-      <button class="btn" type="submit">Show</button>
-    </form>
-    {{end}}
     {{range .ProjectLink}}<a class="btn" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{if gt (len $.Data.ProjectLink) 1}}{{.Project}} queue{{else}}Open queue dashboard{{end}} ↗</a>{{end}}
     <a class="btn btn-primary" href="{{.ListURL}}">All failed jobs</a>
   </div>
@@ -24,8 +14,8 @@
 <section class="stats" aria-label="Summary">
   <a class="stat card stat-link" href="{{.ListURL}}"><span class="stat-icon tone-danger">{{template "icon" "queue"}}</span><span class="stat-label">Failed jobs</span><span class="stat-value">{{compact .Summary.Failures}}</span><span class="stat-note">Terminal and manual, 30 days</span></a>
   <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "layers"}}</span><span class="stat-label">Failing job classes</span><span class="stat-value">{{compact .Summary.JobTypes}}</span><span class="stat-note">Distinct jobs with a failure</span></div>
-  <a class="stat card stat-link" href="/queue-failures/jobs?kind=attempt{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-icon tone-warn">{{template "icon" "refresh"}}</span><span class="stat-label">Failed retries</span><span class="stat-value">{{compact .Summary.Attempts}}</span><span class="stat-note">Attempts that will run again</span></a>
-  <a class="stat card stat-link" href="/issues?category=queue_failure{{with .ProjectID}}&amp;project={{.}}{{end}}"><span class="stat-icon tone-accent">{{template "icon" "inbox"}}</span><span class="stat-label">Unresolved job issues</span><span class="stat-value">{{compact .Summary.Unresolved}}</span><span class="stat-note">Grouped by job and exception</span></a>
+  <a class="stat card stat-link" href="/queue-failures/jobs?kind=attempt"><span class="stat-icon tone-warn">{{template "icon" "refresh"}}</span><span class="stat-label">Failed retries</span><span class="stat-value">{{compact .Summary.Attempts}}</span><span class="stat-note">Attempts that will run again</span></a>
+  <a class="stat card stat-link" href="/issues?category=queue_failure"><span class="stat-icon tone-accent">{{template "icon" "inbox"}}</span><span class="stat-label">Unresolved job issues</span><span class="stat-value">{{compact .Summary.Unresolved}}</span><span class="stat-note">Grouped by job and exception</span></a>
 </section>
 
 <section class="card">
@@ -42,7 +32,7 @@
       <tbody>
       {{range .Top}}
         <tr>
-          <td class="issue-cell"><a class="issue-title" href="/queue-failures/jobs?job={{.JobName}}{{with $.Data.ProjectID}}&amp;project={{.}}{{end}}&amp;kind=all" title="{{.JobName}}">{{classShort .JobName}}</a>
+          <td class="issue-cell"><a class="issue-title" href="/queue-failures/jobs?job={{.JobName}}&amp;kind=all" title="{{.JobName}}">{{classShort .JobName}}</a>
             <div class="muted small mono truncate">{{classNamespace .JobName}}{{if gt .Issues 1}} · {{.Issues}} exceptions{{end}}</div></td>
           <td class="num"><strong>{{compact .Failures}}</strong></td>
           <td class="num muted">{{compact .Attempts}}</td>

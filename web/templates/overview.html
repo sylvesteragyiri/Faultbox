@@ -36,7 +36,7 @@
       <header class="project-card-head">
         <span class="project-mark" aria-hidden="true">{{template "icon" "folder"}}</span>
         <div class="project-card-title">
-          <a class="issue-title" href="/issues?project={{.Project.ID}}">{{.Project.Name}}</a>
+          {{template "scope_link" (dict "CSRF" $.CSRF "Project" .Project.ID "Env" $.Scope.Env "Next" "/issues" "Class" "issue-title" "Label" .Project.Name)}}
           <div class="env-row">
             {{range .Project.Environments}}<span class="env-pill">{{.}}</span>{{else}}<span class="env-pill env-any">any environment</span>{{end}}
             {{if not .Project.Active}}<span class="badge badge-off">Disabled</span>{{end}}
@@ -61,8 +61,8 @@
         <div class="spark-axis muted"><span>7d ago</span><span>now</span></div>
       </div>
       <footer class="project-card-foot">
-        <a href="/issues?project={{.Project.ID}}">{{template "icon" "issues"}}<span>Issues</span></a>
-        <a href="/queue-failures?project={{.Project.ID}}">{{template "icon" "queue"}}<span>Failed jobs</span></a>
+        {{template "scope_link" (dict "CSRF" $.CSRF "Project" .Project.ID "Env" $.Scope.Env "Next" "/issues" "Icon" "issues" "Label" "Issues")}}
+        {{template "scope_link" (dict "CSRF" $.CSRF "Project" .Project.ID "Env" $.Scope.Env "Next" "/queue-failures" "Icon" "queue" "Label" "Failed jobs")}}
         <a href="/projects/{{.Project.ID}}" class="push-right" aria-label="Settings for {{.Project.Name}}" title="Settings">{{template "icon" "settings"}}</a>
       </footer>
     </article>

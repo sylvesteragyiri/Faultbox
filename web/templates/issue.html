@@ -3,7 +3,7 @@
 {{$v := .Data.View}}
 <header class="page-head issue-head">
   <div class="issue-head-main">
-    <p class="crumbs"><a href="/issues">Issues</a> / <a href="/issues?project={{.Data.Project.ID}}&amp;status=all">{{.Data.Project.Name}}</a></p>
+    <p class="crumbs"><a href="/issues">Issues</a> / {{.Data.Project.Name}}</p>
     <h1 class="issue-heading">{{if $i.JobName}}{{$i.JobName}}{{else}}{{$i.ExceptionType}}{{end}}</h1>
     <p class="issue-lead">{{$i.Message}}</p>
     <p class="muted small mono">{{if $i.JobName}}{{$i.ExceptionType}} · {{end}}{{$i.Culprit}}</p>
@@ -16,7 +16,7 @@
   <a class="insight" href="#environments"><span class="insight-icon">{{template "icon" "layers"}}</span><span><strong>Environments</strong><small>{{len .Data.Envs}} affected{{if .Data.Envs}}: {{(index .Data.Envs 0).Name}}{{if gt (len .Data.Envs) 1}} and more{{end}}{{end}}</small></span></a>
   <a class="insight" href="#releases"><span class="insight-icon">{{template "icon" "tag"}}</span><span><strong>Releases</strong><small>{{if .Data.Releases}}{{len .Data.Releases}} affected{{else}}none reported{{end}}</small></span></a>
   <span class="insight"><span class="insight-icon">{{template "icon" "activity"}}</span><span><strong>Type</strong><small>{{if eq $i.Category "queue_failure"}}Failed job{{else if eq $i.Category "notification"}}Failed notification{{else if eq $i.Category "message"}}Message{{else}}Exception{{end}}</small></span></span>
-  <a class="insight" href="/issues?project={{.Data.Project.ID}}&amp;status=all"><span class="insight-icon">{{template "icon" "folder"}}</span><span><strong>Project</strong><small>{{.Data.Project.Name}}</small></span></a>
+  <form class="scope-link-form" method="post" action="/scope">{{template "csrf" .CSRF}}<input type="hidden" name="project" value="{{.Data.Project.ID}}"><input type="hidden" name="env" value="{{.Scope.Env}}"><input type="hidden" name="next" value="/issues?status=all"><button type="submit" class="insight link-button" title="Show this project's issues"><span class="insight-icon">{{template "icon" "folder"}}</span><span><strong>Project</strong><small>{{.Data.Project.Name}}</small></span></button></form>
 </section>
 
 <section class="stats" aria-label="Issue summary">

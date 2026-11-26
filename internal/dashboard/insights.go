@@ -1,9 +1,6 @@
 package dashboard
 
-import (
-	"net/http"
-	"strconv"
-)
+import "net/http"
 
 // requestPage is the v2 destination for request insight navigation. The
 // Laravel SDK does not send request-duration telemetry yet, so this page
@@ -22,13 +19,9 @@ func (h *Handler) jobsPage(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	project := ""
-	if projectID > 0 {
-		project = strconv.FormatInt(projectID, 10)
-	}
 	h.render(w, http.StatusOK, "jobs", "", h.newPage(r, "Jobs", "jobs", map[string]any{
 		"Failed":    summary,
 		"Days":      queueDays,
-		"FailedURL": queueForm{Project: project}.url(),
+		"FailedURL": queueForm{}.url(),
 	}))
 }

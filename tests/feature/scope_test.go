@@ -60,16 +60,51 @@ func TestScopeSwitcherScopesTheDashboard(t *testing.T) {
 		t.Error("the scope itself isn't a filter: no pill lit, nothing to clear")
 	}
 
-	// "All projects" overrides the scope for this list only.
-	all := results(a.Get("/issues?project=").Body)
-	if !contains(all, "TypeError") || !contains(all, "ModelNotFoundException") {
-		t.Error("project= should show every project")
+	// Pages don't take their own project or environment: URL parameters
+	// can't override the switcher.
+	adminID := strconv.FormatInt(admin, 10)
+	for _, path := range []string{"/issues?project=", "/issues?project=" + adminID, "/issues?env=staging"} {
+		if l := results(a.Get(path).Body); !contains(l, "TypeError") || contains(l, "ModelNotFoundException") {
+			t.Errorf("%s should still show only the scoped project", path)
+		}
+	}
+	queue := a.Get("/queue-failures?project=" + adminID).Body
+	jobs := a.Get("/queue-failures/jobs?project=" + adminID + "&env=staging").Body
+	for name, body := range map[string]string{"queue failures": queue, "failed jobs": jobs} {
+		if contains(body, `name="project" class="select-sm"`) || contains(body, `<option value="">Any environment</option>`) ||
+			strings.Count(body, `name="project"`) != 1 { // only the switcher's
+			t.Errorf("%s should not have its own project or environment filter", name)
+		}
 	}
 
 	// The overview follows the scope too.
 	home = a.Get("/").Body
 	if !contains(home, "TypeError") || contains(home, "ModelNotFoundException") || strings.Count(home, `class="project-card card"`) != 1 {
 		t.Error("the overview should show only the scoped project")
+	}
+}
+
+func TestOverviewProjectLinksSwitchTheScope(t *testing.T) {
+	t.Parallel()
+	a, _, admin := appWithTwoProjects(t)
+	adminID := strconv.FormatInt(admin, 10)
+
+	home := a.Get("/").Body
+	if contains(home, "/issues?project=") || contains(home, "/queue-failures?project=") {
+		t.Error("project cards should switch the scope, not add a project parameter")
+	}
+	if !contains(home, `<input type="hidden" name="project" value="`+adminID+`"><input type="hidden" name="env" value=""><input type="hidden" name="next" value="/issues">`) {
+		t.Fatal("the Admin card should switch the scope to Admin and open its issues")
+	}
+	// Following it scopes the issue list, and the issue page's Project insight does the same.
+	resp := setScope(t, a, admin, "", "/issues")
+	if l := results(resp.Body); !contains(l, "ModelNotFoundException") || contains(l, "TypeError") {
+		t.Error("after choosing Admin, the issue list should show only Admin")
+	}
+	id := issueIDFor(t, a, "ModelNotFoundException")
+	issue := a.Get("/issues/" + id).Body
+	if contains(issue, "/issues?project=") || !contains(issue, `name="project" value="`+adminID+`"><input type="hidden" name="env" value=""><input type="hidden" name="next" value="/issues?status=all">`) {
+		t.Error("the issue page's project link should switch the scope")
 	}
 }
 

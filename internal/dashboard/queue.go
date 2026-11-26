@@ -19,10 +19,7 @@ const queueDays = 30
 
 func (h *Handler) queueDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	projectID, _ := strconv.ParseInt(r.URL.Query().Get("project"), 10, 64)
-	if !r.URL.Query().Has("project") {
-		projectID = scopeFrom(r).ProjectID
-	}
+	projectID := scopeFrom(r).ProjectID // the switcher in the sidebar picks the project
 
 	names, projects, err := h.projectNames(r)
 	if err != nil {
@@ -83,14 +80,9 @@ func (h *Handler) queueDashboard(w http.ResponseWriter, r *http.Request) {
 	for _, b := range connections {
 		connTotal += b.Count
 	}
-	project0 := ""
-	if projectID > 0 {
-		project0 = strconv.FormatInt(projectID, 10)
-	}
 	h.render(w, http.StatusOK, "queue", "", h.newPage(r, "Queue Failures", "queue", map[string]any{
 		"Projects":    projects,
 		"Project":     project,
-		"ProjectID":   project0,
 		"Summary":     summary,
 		"Chart":       newBarChart("Failed jobs per day, last 30 days", trend, []string{"Failed jobs", "Failed retries"}),
 		"Top":         top,
@@ -100,7 +92,7 @@ func (h *Handler) queueDashboard(w http.ResponseWriter, r *http.Request) {
 		"ConnTotal":   connTotal,
 		"Rates":       rates,
 		"Recent":      h.failedJobRows(names, recent.Jobs),
-		"ListURL":     queueForm{Project: project0}.url(),
+		"ListURL":     queueForm{}.url(),
 		"ProjectLink": queueToolLinks(projects, projectID),
 	}))
 }
@@ -142,24 +134,15 @@ type queueForm struct {
 func parseQueueForm(r *http.Request) queueForm {
 	q := r.URL.Query()
 	f := queueForm{
-		Project:    q.Get("project"),
 		Queue:      strings.TrimSpace(q.Get("queue")),
 		Connection: strings.TrimSpace(q.Get("connection")),
 		Job:        strings.TrimSpace(q.Get("job")),
-		Env:        strings.TrimSpace(q.Get("env")),
 		Kind:       q.Get("kind"),
 		Range:      q.Get("range"),
 	}
+	// Project and environment come only from the switcher in the sidebar.
 	f.scope = scopeFrom(r)
-	if !q.Has("project") {
-		f.Project = f.scope.Project()
-	}
-	if !q.Has("env") {
-		f.Env = f.scope.Env
-	}
-	if _, err := strconv.ParseInt(f.Project, 10, 64); err != nil {
-		f.Project = ""
-	}
+	f.Project, f.Env = f.scope.Project(), f.scope.Env
 	switch f.Kind {
 	case store.QueueKindAttempts, store.QueueKindAll:
 	default:
@@ -193,12 +176,6 @@ func (f queueForm) values() url.Values {
 			v.Set(k, val)
 		}
 	}
-	if f.Project != f.scope.Project() {
-		v.Set("project", f.Project)
-	}
-	if f.Env != f.scope.Env {
-		v.Set("env", f.Env)
-	}
 	set("queue", f.Queue, "")
 	set("connection", f.Connection, "")
 	set("job", f.Job, "")
@@ -223,15 +200,9 @@ func (f queueForm) PageURL(page int) string { f.Page = page; return f.url() }
 // JobURL filters the same results to one job class.
 func (f queueForm) JobURL(job string) string { f.Job, f.Page = job, 1; return f.url() }
 
-// ProjectSet reports whether the list's project differs from the scope.
-func (f queueForm) ProjectSet() bool { return f.Project != f.scope.Project() }
-
-// EnvSet reports whether the list's environment differs from the scope.
-func (f queueForm) EnvSet() bool { return f.Env != f.scope.Env }
-
 // Filtered reports whether anything beyond the defaults is applied.
 func (f queueForm) Filtered() bool {
-	return f.ProjectSet() || f.Queue != "" || f.Connection != "" || f.Job != "" || f.EnvSet() ||
+	return f.Queue != "" || f.Connection != "" || f.Job != "" ||
 		f.Range != "" || f.Kind != store.QueueKindFailures
 }
 
@@ -326,7 +297,7 @@ func (h *Handler) failedJobShow(w http.ResponseWriter, r *http.Request) {
 		"User":    prettyJSON(job.Event.UserContext),
 		"Context": prettyJSON(job.Event.EventContext),
 		"History": history,
-		"ListURL": queueForm{Project: strconv.FormatInt(job.ProjectID, 10), Job: job.JobName}.url(),
+		"ListURL": queueForm{Job: job.JobName}.url(),
 		"Next":    "/queue-failures/" + strconv.FormatInt(job.EventID, 10),
 	}))
 }
