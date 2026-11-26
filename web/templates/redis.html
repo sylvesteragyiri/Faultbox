@@ -19,7 +19,7 @@
 <section class="card table-wrap">
   <div class="section-head table-title"><h2>Servers</h2></div>
   <table class="redis-table">
-    <thead><tr><th>Server</th><th>Status</th><th>Memory</th><th class="num hide-sm">Clients</th><th class="num hide-sm">Keys</th><th class="hide-sm">Uptime</th><th>Last check</th><th class="hide-sm">Alerts</th></tr></thead>
+    <thead><tr><th>Server</th><th>Status</th><th>Memory</th><th class="num hide-sm">Clients</th><th class="num hide-sm">Keys</th><th class="hide-sm">Uptime</th><th>Last check</th><th class="hide-sm">Alerts</th><th class="actions-col"><span class="sr-only">Actions</span></th></tr></thead>
     <tbody>{{range .Rows}}
       <tr>
         <td><a class="issue-title" href="/redis/{{.Target.ID}}">{{.Target.Name}}</a></td>
@@ -43,6 +43,7 @@
           {{if .Target.LastError}}<div class="error-text small">{{.Target.LastError}}</div>{{end}}
         </td>
         <td class="hide-sm">{{if .Target.AlertEnabled}}On{{else}}<span class="muted">Off</span>{{end}}</td>
+        <td class="actions-col"><a class="btn btn-sm btn-ghost" href="/redis/{{.Target.ID}}/edit" aria-label="Edit {{.Target.Name}}">Edit</a></td>
       </tr>
     {{end}}</tbody>
   </table>

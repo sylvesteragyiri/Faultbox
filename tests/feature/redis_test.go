@@ -40,14 +40,34 @@ func TestRedisDashboardAddsNamedServersWithOptionalAlerts(t *testing.T) {
 	}
 	resp := post("Production cache", "redis://:highly-secret-password@localhost:6379/0", "1")
 	if !strings.HasPrefix(resp.Request.URL.Path, "/redis/") || strings.Contains(resp.Body, "highly-secret-password") ||
-		!strings.Contains(resp.Body, "Settings") || !strings.Contains(resp.Body, `formaction="/redis/1/test"`) ||
-		!strings.Contains(resp.Body, "Waiting for the first check") || !strings.Contains(resp.Body, `class="card danger-zone"`) ||
-		strings.Contains(resp.Body, `formtarget="_blank"`) {
+		!strings.Contains(resp.Body, "Waiting for the first check") || !strings.Contains(resp.Body, `href="/redis/1/edit"`) {
 		t.Fatalf("saved Redis target response URL=%s contains expected name/secret policy: %v", resp.Request.URL, resp.Body)
+	}
+	// The server page shows monitoring only; settings and delete live on the edit page.
+	for _, unwanted := range []string{`name="endpoint"`, "Save settings", `class="card danger-zone"`, `/redis/1/delete`} {
+		if strings.Contains(resp.Body, unwanted) {
+			t.Errorf("server page should not contain %q", unwanted)
+		}
+	}
+	edit := a.Get("/redis/1/edit")
+	if edit.StatusCode != http.StatusOK || !strings.Contains(edit.Body, "Edit server") || !strings.Contains(edit.Body, `action="/redis/1"`) ||
+		!strings.Contains(edit.Body, `value="Production cache"`) || !strings.Contains(edit.Body, `formaction="/redis/1/test"`) ||
+		!strings.Contains(edit.Body, `class="card danger-zone"`) || !strings.Contains(edit.Body, `href="/redis/1">Cancel`) ||
+		strings.Contains(edit.Body, "highly-secret-password") || strings.Contains(edit.Body, `formtarget="_blank"`) {
+		t.Fatalf("edit page: %d", edit.StatusCode)
+	}
+	if missing := a.Get("/redis/9999/edit"); missing.StatusCode != http.StatusNotFound {
+		t.Fatalf("editing a missing server: %d", missing.StatusCode)
+	}
+	if bad := a.Get("/redis/abc/edit"); bad.StatusCode != http.StatusNotFound {
+		t.Fatalf("editing a non-numeric id: %d", bad.StatusCode)
 	}
 	resp = a.Get("/redis")
 	if !strings.Contains(resp.Body, "Production cache") || !strings.Contains(resp.Body, ">Waiting</span>") {
 		t.Fatal("created Redis target was not listed on the overview as waiting")
+	}
+	if !strings.Contains(resp.Body, `href="/redis/1/edit" aria-label="Edit Production cache">Edit</a>`) {
+		t.Fatal("each Redis row should link to its edit page")
 	}
 	resp = post("Queue cache", "redis://localhost:6379/1", "")
 	if !strings.Contains(resp.Body, "Queue cache") || !strings.Contains(a.Get("/redis").Body, "Queue cache") {
@@ -213,7 +233,7 @@ func TestRedisDashboardRejectsDuplicateNameAndBadEdit(t *testing.T) {
 	path := "/redis/" + strconv.FormatInt(id, 10)
 	resp = a.PostForm(path, url.Values{"name": {"Renamed"}, "endpoint": {"redis://localhost:99999"}, "enabled": {"1"}}, a.CSRF(path))
 	if resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(resp.Body, "port must be between") ||
-		!strings.Contains(resp.Body, `value="Renamed"`) || !strings.Contains(resp.Body, "Memory history") {
+		!strings.Contains(resp.Body, `value="Renamed"`) || !strings.Contains(resp.Body, "Edit server") || strings.Contains(resp.Body, "Memory history") {
 		t.Fatalf("bad edit response: %d %s", resp.StatusCode, resp.Body)
 	}
 	if target, err := a.Store().RedisTarget(t.Context(), id); err != nil || target.Name != "Main" {

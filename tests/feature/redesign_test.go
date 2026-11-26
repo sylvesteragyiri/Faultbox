@@ -2,6 +2,7 @@ package feature
 
 import (
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -135,5 +136,35 @@ func TestV2InsightPagesShowHonestEmptyStates(t *testing.T) {
 		if !contains(jobs.Body, want) {
 			t.Errorf("Jobs page is missing %q", want)
 		}
+	}
+}
+
+func TestJobsPageFailedCardUsesQueueFailures(t *testing.T) {
+	t.Parallel()
+	empty := testutil.NewApp(t)
+	empty.LoginAdmin()
+	body := empty.Get("/jobs").Body
+	if !contains(body, `href="/queue-failures/jobs"`) || !contains(body, `<span class="stat-value">0</span>`) || !contains(body, "Last 30 days · from Queue Failures") {
+		t.Error("with no failures the Failed card should show 0 and link to Queue Failures")
+	}
+	if contains(body, "failed retr") {
+		t.Error("no retry note without failed retries")
+	}
+
+	a := appWithIssues(t)
+	sum, err := a.Store().QueueSummary(t.Context(), 0, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Failures == 0 {
+		t.Fatal("fixtures should include failed jobs")
+	}
+	body = a.Get("/jobs").Body
+	if want := `<span class="stat-value">` + strconv.FormatInt(sum.Failures, 10) + `</span>`; !contains(body, want) {
+		t.Errorf("Failed card should show %d failures from Queue Failures", sum.Failures)
+	}
+	// Total and Succeeded still wait for M10 job-run telemetry.
+	if strings.Count(body, `<span class="stat-value muted">—</span>`) != 2 || !contains(body, "No job run data yet") {
+		t.Error("Total runs and Succeeded must stay empty until job runs are collected")
 	}
 }

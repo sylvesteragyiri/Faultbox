@@ -120,7 +120,7 @@ func (h *Handler) redisConnectionTest(w http.ResponseWriter, r *http.Request, ta
 	targetName := strings.TrimSpace(r.PostFormValue("name"))
 	usedSaved := false
 	if targetID > 0 {
-		backURL = "/redis/" + strconv.FormatInt(targetID, 10)
+		backURL = "/redis/" + strconv.FormatInt(targetID, 10) + "/edit"
 		target, err := h.store.RedisTarget(r.Context(), targetID)
 		if errors.Is(err, store.ErrNotFound) {
 			h.notFound(w, r)
@@ -174,7 +174,7 @@ func (h *Handler) redisTargetPage(w http.ResponseWriter, r *http.Request) {
 		h.notFound(w, r)
 		return
 	}
-	pg, ok := h.redisTargetData(w, r, id, nil)
+	pg, ok := h.redisTargetData(w, r, id)
 	if !ok {
 		return
 	}
@@ -184,18 +184,12 @@ func (h *Handler) redisTargetPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, http.StatusOK, "redis_target", "", pg)
 }
 
-// redisTargetData loads everything the server page shows. When form is not
-// nil, the settings form shows those values and its error instead of the
-// saved settings. It writes the error response itself and returns false.
-func (h *Handler) redisTargetData(w http.ResponseWriter, r *http.Request, id int64, form *redisForm) (page, bool) {
+// redisTargetData loads everything the server page shows. It writes the
+// error response itself and returns false.
+func (h *Handler) redisTargetData(w http.ResponseWriter, r *http.Request, id int64) (page, bool) {
 	ctx := r.Context()
-	target, err := h.store.RedisTarget(ctx, id)
-	if errors.Is(err, store.ErrNotFound) {
-		h.notFound(w, r)
-		return page{}, false
-	}
-	if err != nil {
-		h.serverError(w, err)
+	target, ok := h.redisTargetOr404(w, r, id)
+	if !ok {
 		return page{}, false
 	}
 	var latest *store.RedisSample
@@ -210,14 +204,49 @@ func (h *Handler) redisTargetData(w http.ResponseWriter, r *http.Request, id int
 		h.serverError(w, err)
 		return page{}, false
 	}
+	return h.newPage(r, target.Name, "redis", map[string]any{
+		"Target": target, "State": redisStateOf(target), "Latest": latest, "Plot": makeRedisPlot(history),
+		"RetentionDays": h.opts.RetentionDays,
+	}), true
+}
+
+func (h *Handler) redisTargetOr404(w http.ResponseWriter, r *http.Request, id int64) (store.RedisTarget, bool) {
+	target, err := h.store.RedisTarget(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		h.notFound(w, r)
+		return target, false
+	}
+	if err != nil {
+		h.serverError(w, err)
+		return target, false
+	}
+	return target, true
+}
+
+// redisEdit shows a server's settings and delete action.
+func (h *Handler) redisEdit(w http.ResponseWriter, r *http.Request) {
+	id, ok := redisPathID(r)
+	if !ok {
+		h.notFound(w, r)
+		return
+	}
+	h.renderRedisEdit(w, r, http.StatusOK, id, nil)
+}
+
+// renderRedisEdit renders the edit page. When form is not nil, it shows
+// those values and their error instead of the saved settings.
+func (h *Handler) renderRedisEdit(w http.ResponseWriter, r *http.Request, status int, id int64, form *redisForm) {
+	target, ok := h.redisTargetOr404(w, r, id)
+	if !ok {
+		return
+	}
 	f := redisForm{Name: target.Name, Enabled: target.Enabled, AlertEnabled: target.AlertEnabled}
 	if form != nil {
 		f = *form
 	}
-	return h.newPage(r, target.Name, "redis", map[string]any{
-		"Target": target, "State": redisStateOf(target), "Latest": latest, "Plot": makeRedisPlot(history),
-		"RetentionDays": h.opts.RetentionDays, "Form": f, "Thresholds": redismon.AlertThresholds,
-	}), true
+	h.render(w, status, "redis_edit", "", h.newPage(r, "Edit "+target.Name, "redis", map[string]any{
+		"Target": target, "Form": f, "Thresholds": redismon.AlertThresholds,
+	}))
 }
 
 func (h *Handler) redisSave(w http.ResponseWriter, r *http.Request) {
@@ -245,9 +274,7 @@ func (h *Handler) redisSave(w http.ResponseWriter, r *http.Request) {
 			h.renderRedisNew(w, r, status, form)
 			return
 		}
-		if pg, ok := h.redisTargetData(w, r, id, &form); ok {
-			h.render(w, status, "redis_target", "", pg)
-		}
+		h.renderRedisEdit(w, r, status, id, &form)
 	}
 	name, err := store.NormalizeRedisName(form.Name)
 	if err != nil {

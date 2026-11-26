@@ -9,6 +9,7 @@
       {{else}}Last checked <time datetime="{{isoTime .Target.LastChecked}}" title="{{datetime .Target.LastChecked}}">{{timeago .Target.LastChecked}}</time>.{{if not .Target.Enabled}} Monitoring is paused.{{end}}{{end}}
     </p>
   </div>
+  <a class="btn" href="/redis/{{.Target.ID}}/edit">Edit server</a>
 </header>
 
 {{if .Target.LastError}}
@@ -35,34 +36,11 @@
 <section class="card">
   <div class="section-head"><h2>Memory history</h2><span class="muted small">Last {{.RetentionDays}} days</span></div>
   {{if .Plot.Empty}}
-    <p class="muted">Memory history appears after the first successful check.{{if not .Target.Enabled}} Turn on monitoring below to start collecting it.{{end}}</p>
+    <p class="muted">Memory history appears after the first successful check.{{if not .Target.Enabled}} <a href="/redis/{{.Target.ID}}/edit">Turn on monitoring</a> to start collecting it.{{end}}</p>
   {{else}}
     {{template "redis_memory_chart" .Plot}}
   {{end}}
 </section>
 
-<div class="grid-2 grid-wide-left">
-  <form class="card stack" method="post" action="/redis/{{.Target.ID}}">
-    <h2>Settings</h2>
-    {{template "csrf" $.CSRF}}
-    {{template "form_error" .Form.Error}}
-    {{template "redis_fields" (dict "Form" .Form "New" false "Thresholds" .Thresholds)}}
-    <div class="row">
-      <button class="btn btn-primary" type="submit">Save settings</button>
-      <button class="btn" type="submit" formaction="/redis/{{.Target.ID}}/test" hx-post="/redis/{{.Target.ID}}/test" hx-include="closest form" hx-target="#redis-test-result" hx-swap="innerHTML">Test connection</button>
-    </div>
-  </form>
-
-  <div class="stack">
-    {{template "redis_help"}}
-    <section class="card danger-zone">
-      <h2>Delete server</h2>
-      <p class="small muted">Stops monitoring and removes this server's memory history. Alerts already sent are kept.</p>
-      <form method="post" action="/redis/{{.Target.ID}}/delete" data-confirm="Delete this Redis server and its memory history?">
-        {{template "csrf" $.CSRF}}<button class="btn btn-danger" type="submit">Delete server</button>
-      </form>
-    </section>
-  </div>
-</div>
 {{end}}
 {{end}}

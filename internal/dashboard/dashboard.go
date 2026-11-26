@@ -131,6 +131,7 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("GET /redis/new", h.redisNew)
 	authed.HandleFunc("POST /redis", h.redisSave)
 	authed.HandleFunc("GET /redis/{id}", h.redisTargetPage)
+	authed.HandleFunc("GET /redis/{id}/edit", h.redisEdit)
 	authed.HandleFunc("POST /redis/test", h.redisTestNew)
 	authed.HandleFunc("POST /redis/{id}", h.redisSave)
 	authed.HandleFunc("POST /redis/{id}/test", h.redisTestExisting)
@@ -170,7 +171,7 @@ func cacheStatic(next http.Handler) http.Handler {
 var pageNames = []string{
 	"login", "overview", "projects", "project_new", "project", "project_key",
 	"settings", "error", "issues", "issue", "queue", "queue_jobs", "queue_job", "redis_test",
-	"notifications", "notification_channel", "notification_secret", "deliveries", "commands", "cache", "redis", "redis_new", "redis_target", "requests", "jobs",
+	"notifications", "notification_channel", "notification_secret", "deliveries", "commands", "cache", "redis", "redis_new", "redis_target", "redis_edit", "requests", "jobs",
 }
 
 // assetURL returns a function mapping a static path to its URL with a

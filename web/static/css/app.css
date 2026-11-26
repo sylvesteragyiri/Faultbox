@@ -722,6 +722,7 @@ fieldset > legend { font-weight: 500; font-size: .84rem; padding: 0 .35rem; }
 .redis-memory-text { display: flex; justify-content: space-between; gap: .75rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .redis-table td { vertical-align: top; }
 .redis-table .error-text.small { max-width: 32ch; }
+.redis-table .actions-col { width: 1%; text-align: right; white-space: nowrap; }
 .redis-test-slot:empty { display: none; }
 .redis-test-result .alert { margin-bottom: .75rem; }
 .redis-test-result .details { margin-bottom: 0; }
