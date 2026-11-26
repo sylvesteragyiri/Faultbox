@@ -3,7 +3,7 @@
 ## Project map
 
 - This directory is the Go server repository (`go.mod`, `cmd/`, `internal/`, `migrations/`, `web/`, `tests/`).
-- The workspace parent contains the product docs in `../docs/`: `prd.md`, `roadmap.md`, `upcoming-features.md`, and `ui-redesign-v2.md`.
+- The workspace parent contains the docs in `../docs/` (index: `../docs/README.md`): `product/` (`prd.md`, `roadmap.md`, `upcoming-features.md`, `decisions.md`), `plans/`, `operations/` and `api/`.
 - The Laravel SDK is a sibling project in `../faultbox-laravel/`.
 - Preserve uncommitted work. Check `git status` and inspect the existing diff before editing; do not commit unless asked.
 
@@ -35,5 +35,5 @@
 ## Current UI direction
 
 - The reference screenshots are inspiration for layout and density, not Faultbox branding or evidence that every shown feature exists.
-- Follow `../docs/ui-redesign-v2.md` for the planned project/environment scope selector, grouped sidebar, page-level filters, dark-first neutral palette, compact issue rows, metric cards, and shared tables.
+- Follow `../docs/plans/ui-redesign-v2.md` for the planned project/environment scope selector, grouped sidebar, page-level filters, dark-first neutral palette, compact issue rows, metric cards, and shared tables.
 - Requests and successful job runs require new telemetry and are tracked in M10; the UI redesign is M11. Do not present uncollected data as real: use explicit empty states until ingestion exists.

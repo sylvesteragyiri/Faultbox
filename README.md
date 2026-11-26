@@ -10,9 +10,9 @@ Lightweight, self-hosted error and queue monitoring for Laravel applications.
 > - **M6:** email and webhook notifications.
 > - **Next:** operations and hardening (M7).
 >
-> See [docs/roadmap.md](docs/roadmap.md).
+> See [docs/product/roadmap.md](../docs/product/roadmap.md).
 >
-> Security controls and known gaps: [docs/security-practices.md](../docs/security-practices.md).
+> Security controls and known gaps: [docs/operations/security-practices.md](../docs/operations/security-practices.md).
 
 ## Run with Docker Compose
 
