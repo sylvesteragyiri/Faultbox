@@ -2,46 +2,26 @@
 {{$f := .Data.Form}}
 <header class="page-head"><div><h1>Issues</h1><p class="page-sub">Grouped exceptions and failures from your projects.</p></div></header>
 
-<nav class="issue-tabs" aria-label="Issue type">
-  <a href="{{$f.CategoryURL "errors"}}" {{if eq $f.Category "errors"}}aria-current="page"{{end}}>Exceptions</a>
-  <a href="{{$f.CategoryURL "queue_failure"}}" {{if eq $f.Category "queue_failure"}}aria-current="page"{{end}}>Failed jobs</a>
-  <a href="{{$f.CategoryURL "notification"}}" {{if eq $f.Category "notification"}}aria-current="page"{{end}}>Notifications</a>
-  <a href="{{$f.CategoryURL "all"}}" {{if eq $f.Category "all"}}aria-current="page"{{end}}>All</a>
-</nav>
+{{template "issue_tabs" .}}
 
-<div class="issue-controls">
-  <form class="issue-search" method="get" action="/issues" role="search" hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, input changed delay:300ms from:find input[name=q]">
-    <label class="search-field"><span class="sr-only">Search issues</span>{{template "icon" "search"}}<input type="search" name="q" value="{{$f.Q}}" placeholder="Search issues" autocomplete="off" data-hotkey="/"></label>
-    <input type="hidden" name="status" value="{{$f.Status}}"><input type="hidden" name="category" value="{{$f.Category}}"><input type="hidden" name="assigned" value="{{$f.Assigned}}"><input type="hidden" name="release" value="{{$f.Release}}"><input type="hidden" name="type" value="{{$f.Type}}"><input type="hidden" name="range" value="{{$f.Range}}"><input type="hidden" name="sort" value="{{$f.Sort}}">
-    {{if $f.ProjectSet}}<input type="hidden" name="project" value="{{$f.Project}}">{{end}}{{if $f.EnvSet}}<input type="hidden" name="env" value="{{$f.Env}}">{{end}}
-    <button class="btn btn-sm" type="submit">Search</button>
-  </form>
-  <nav class="issue-status-tabs" aria-label="Issue status">
-    <a href="{{$f.StatusURL "unresolved"}}" {{if and (eq $f.Status "unresolved") (eq $f.Assigned "")}}aria-current="page"{{end}}>Open</a>
-    <a href="{{$f.AssignedURL "unassigned"}}" {{if eq $f.Assigned "unassigned"}}aria-current="page"{{end}}>Unassigned</a>
-    <a href="{{$f.AssignedURL "mine"}}" {{if eq $f.Assigned "mine"}}aria-current="page"{{end}}>Mine</a>
-    <a href="{{$f.StatusURL "resolved"}}" {{if eq $f.Status "resolved"}}aria-current="page"{{end}}>Resolved</a>
-    <a href="{{$f.StatusURL "ignored"}}" {{if eq $f.Status "ignored"}}aria-current="page"{{end}}>Ignored</a>
-    <a href="{{$f.StatusURL "all"}}" {{if and (eq $f.Status "all") (eq $f.Assigned "")}}aria-current="page"{{end}}>All status</a>
-  </nav>
-</div>
-
-<details class="advanced-filters" {{if or $f.ProjectSet $f.EnvSet $f.Release $f.Type $f.Range}}open{{end}}>
-  <summary>Filters{{if $f.Filtered}} <span class="filter-active">Active</span>{{end}}</summary>
-  <form class="filter-bar" method="get" action="/issues" hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change, submit">
-    <input type="hidden" name="q" value="{{$f.Q}}"><input type="hidden" name="status" value="{{$f.Status}}"><input type="hidden" name="category" value="{{$f.Category}}"><input type="hidden" name="assigned" value="{{$f.Assigned}}">
-    <div class="pill-row">
-      <label class="pill"><span class="sr-only">Project</span><select name="project"><option value="">All projects</option>{{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-      <label class="pill"><span class="sr-only">Environment</span><select name="env"><option value="">Any environment</option>{{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}</select></label>
-      <label class="pill"><span class="sr-only">Release</span><select name="release"><option value="">Any release</option>{{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}</select></label>
-      <label class="pill"><span class="sr-only">Exception type</span><select name="type"><option value="">Any type</option>{{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{classShort .}}</option>{{end}}</select></label>
-      <label class="pill"><span class="sr-only">Time range</span><select name="range"><option value="">Any time</option><option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>24 hours</option><option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>7 days</option><option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>30 days</option><option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>90 days</option></select></label>
-      <label class="pill"><span class="sr-only">Sort</span><select name="sort"><option value="last_seen" {{if eq $f.Sort "last_seen"}}selected{{end}}>Most recent</option><option value="count" {{if eq $f.Sort "count"}}selected{{end}}>Most frequent</option><option value="first_seen" {{if eq $f.Sort "first_seen"}}selected{{end}}>First seen</option></select></label>
-      {{if $f.Filtered}}<a class="pill-clear" href="/issues">Clear filters</a>{{end}}
+<form id="issue-filters" class="issue-toolbar" method="get" action="/issues" role="search" hx-get="/issues" hx-target="#issue-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, input changed delay:300ms from:find input[name=q], change from:.js-filter">
+  <input type="hidden" name="status" value="{{$f.Status}}"><input type="hidden" name="category" value="{{$f.Category}}"><input type="hidden" name="assigned" value="{{$f.Assigned}}">
+  <label class="search-field"><span class="sr-only">Search issues</span>{{template "icon" "search"}}<input type="search" name="q" value="{{$f.Q}}" placeholder="Search issues" autocomplete="off" data-hotkey="/"></label>
+  {{template "issue_status_menu" .}}
+  <details class="menu filter-menu" data-menu>
+    <summary class="menu-trigger">Filters {{template "issue_filter_count" .}}<span class="menu-chevron" aria-hidden="true">⌄</span></summary>
+    <div class="menu-panel filter-panel">
+      <label>Project<select class="js-filter" name="project"><option value="">All projects</option>{{range .Data.Projects}}<option value="{{.ID}}" {{if eq $f.Project (printf "%d" .ID)}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      <label>Environment<select class="js-filter" name="env"><option value="">Any environment</option>{{range .Data.Facets.Environments}}<option {{if eq $f.Env .}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      <label>Release<select class="js-filter" name="release"><option value="">Any release</option>{{range .Data.Facets.Releases}}<option {{if eq $f.Release .}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+      <label>Exception type<select class="js-filter" name="type"><option value="">Any type</option>{{range .Data.Facets.ExceptionTypes}}<option value="{{.}}" {{if eq $f.Type .}}selected{{end}}>{{classShort .}}</option>{{end}}</select></label>
+      <label>Seen in<select class="js-filter" name="range"><option value="">Any time</option><option value="24h" {{if eq $f.Range "24h"}}selected{{end}}>24 hours</option><option value="7d" {{if eq $f.Range "7d"}}selected{{end}}>7 days</option><option value="30d" {{if eq $f.Range "30d"}}selected{{end}}>30 days</option><option value="90d" {{if eq $f.Range "90d"}}selected{{end}}>90 days</option></select></label>
       <noscript><button class="btn btn-sm" type="submit">Apply filters</button></noscript>
     </div>
-  </form>
-</details>
+  </details>
+  <label class="pill toolbar-sort"><span class="sr-only">Sort</span><select class="js-filter" name="sort"><option value="last_seen" {{if eq $f.Sort "last_seen"}}selected{{end}}>Most recent</option><option value="count" {{if eq $f.Sort "count"}}selected{{end}}>Most frequent</option><option value="first_seen" {{if eq $f.Sort "first_seen"}}selected{{end}}>First seen</option></select></label>
+  <noscript><button class="btn btn-sm" type="submit">Search</button></noscript>
+</form>
 
 {{template "issue_results" .}}
 {{end}}
@@ -49,15 +29,27 @@
 {{define "issue_results"}}
 {{$f := .Data.Form}}
 <section id="issue-results" class="issue-results" aria-live="polite">
+  {{with $f.ActiveFilters .Data.Projects}}
+  <ul class="filter-chips" aria-label="Active filters">
+    {{range .}}<li><a class="filter-chip" href="{{.RemoveURL}}" aria-label="Remove filter {{.Label}}: {{.Value}}"><span class="muted">{{.Label}}</span> {{.Value}} <span aria-hidden="true">×</span></a></li>{{end}}
+    <li><a class="pill-clear" href="{{$f.ClearFiltersURL}}">Clear filters</a></li>
+  </ul>
+  {{end}}
   {{if .Data.Rows}}
-  <div class="results-bar"><span class="muted small">Showing <strong>{{.Data.First}}-{{.Data.Last}}</strong>{{if .Data.Page.HasNext}} and more{{end}}</span></div>
-  <form id="issue-bulk" class="bulk-bar" method="post" action="/issues/bulk" data-confirm="Apply this action to the selected issues?">
+  <form id="issue-bulk" class="results-bar" method="post" action="/issues/bulk" data-confirm="Apply this action to the selected issues?" data-bulk>
     {{template "csrf" .CSRF}}<input type="hidden" name="next" value="{{$f.ListURL}}">
-    <span class="muted small">Select issues to apply an action</span>
-    <button class="btn btn-sm" name="operation" value="resolved" type="submit">Resolve</button>
-    <button class="btn btn-sm" name="operation" value="ignored" type="submit">Ignore</button>
-    <button class="btn btn-sm btn-ghost" name="operation" value="assign_me" type="submit">Assign to me</button>
-    <button class="btn btn-sm btn-ghost" name="operation" value="unassign" type="submit">Unassign</button>
+    <span class="muted small">Showing <strong>{{.Data.First}}-{{.Data.Last}}</strong>{{if .Data.Page.HasNext}} and more{{end}}<span class="bulk-count" data-bulk-count hidden></span></span>
+    <span class="bulk-actions">
+      <label class="pill"><span class="sr-only">Action for selected issues</span><select name="operation" required data-bulk-control>
+        <option value="" selected disabled>Bulk action</option>
+        {{if ne $f.Status "resolved"}}<option value="resolved">Resolve</option>{{end}}
+        {{if ne $f.Status "ignored"}}<option value="ignored">Ignore</option>{{end}}
+        {{if ne $f.Status "unresolved"}}<option value="unresolved">Reopen</option>{{end}}
+        <option value="assign_me">Assign to me</option>
+        <option value="unassign">Unassign</option>
+      </select></label>
+      <button class="btn btn-sm" type="submit" data-bulk-control>Apply</button>
+    </span>
   </form>
   <div class="table-wrap issue-table-wrap">
     <table class="data-table issue-table">
@@ -101,4 +93,25 @@
   <div class="empty-state"><span class="empty-mark">{{template "icon" "issues"}}</span><h2>{{if $f.Filtered}}No matching issues{{else}}No open issues{{end}}</h2><p>No data found - try adjusting the filters or time range.</p>{{if $f.Filtered}}<a href="/issues">Clear filters</a>{{end}}</div>
   {{end}}
 </section>
+{{if .Data.Partial}}{{template "issue_tabs" .}}{{template "issue_status_menu" .}}{{template "issue_filter_count" .}}{{end}}
 {{end}}
+
+{{define "issue_tabs"}}{{$f := .Data.Form}}
+<nav id="issue-tabs" class="issue-tabs" aria-label="Issue type"{{if .Data.Partial}} hx-swap-oob="true"{{end}}>
+  <a href="{{$f.CategoryURL "errors"}}" {{if eq $f.Category "errors"}}aria-current="page"{{end}}>Exceptions</a>
+  <a href="{{$f.CategoryURL "queue_failure"}}" {{if eq $f.Category "queue_failure"}}aria-current="page"{{end}}>Failed jobs</a>
+  <a href="{{$f.CategoryURL "notification"}}" {{if eq $f.Category "notification"}}aria-current="page"{{end}}>Notifications</a>
+  <a href="{{$f.CategoryURL "all"}}" {{if eq $f.Category "all"}}aria-current="page"{{end}}>All</a>
+</nav>
+{{end}}
+
+{{define "issue_status_menu"}}{{$f := .Data.Form}}
+<details id="issue-status-menu" class="menu status-menu" data-menu{{if .Data.Partial}} hx-swap-oob="true"{{end}}>
+  <summary class="menu-trigger"><span class="muted">Status</span> <strong>{{$f.StatusLabel}}</strong><span class="menu-chevron" aria-hidden="true">⌄</span></summary>
+  <nav class="menu-panel" aria-label="Issue status">
+    {{range $f.StatusOptions}}{{if .Divider}}<hr class="menu-sep">{{end}}<a class="menu-item" href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}{{if .Current}}{{template "icon" "check"}}{{end}}</a>{{end}}
+  </nav>
+</details>
+{{end}}
+
+{{define "issue_filter_count"}}{{$n := .Data.Form.FilterCount}}<span id="issue-filter-count" class="menu-count"{{if not $n}} hidden{{end}}{{if .Data.Partial}} hx-swap-oob="true"{{end}}>{{$n}}<span class="sr-only"> active</span></span>{{end}}

@@ -263,3 +263,88 @@ func TestOverviewShowsTrendAndRecent(t *testing.T) {
 		t.Errorf("%d day columns, want 30", n)
 	}
 }
+
+func TestIssueToolbarMenusAndBulkSelect(t *testing.T) {
+	t.Parallel()
+	a := appWithIssues(t)
+
+	body := a.Get("/issues").Body
+	for _, want := range []string{
+		`id="issue-filters"`, `id="issue-status-menu"`, `<strong>Open</strong>`, // one status dropdown
+		`aria-current="page">Open`, `>Unassigned</a>`, `>Mine</a>`, `>Resolved</a>`, `>Ignored</a>`, `>All status</a>`,
+		`class="menu filter-menu"`, `name="release"`, `name="sort"`, // filters menu and sort in the same form
+		`<select name="operation" required`, `>Bulk action</option>`, `value="assign_me">Assign to me`, // one action dropdown
+	} {
+		if !contains(body, want) {
+			t.Errorf("issue list is missing %q", want)
+		}
+	}
+	if contains(body, `name="operation" value="resolved"`) || contains(body, `value="unresolved">Reopen`) {
+		t.Error("bulk actions should be one dropdown, without Reopen on the open list")
+	}
+	if contains(body, `class="filter-chips"`) || !contains(body, `class="menu-count" hidden`) {
+		t.Error("no filter chips or count without filters")
+	}
+
+	if !contains(a.Get("/issues?status=resolved").Body, `<strong>Resolved</strong>`) {
+		t.Error("the status menu should name the Resolved view")
+	}
+	all := a.Get("/issues?status=all").Body
+	if !contains(all, `value="unresolved">Reopen`) || !contains(all, `value="resolved">Resolve`) {
+		t.Error("the all-status list should offer both Resolve and Reopen")
+	}
+	if !contains(a.Get("/issues?assigned=mine").Body, `<strong>Mine</strong>`) {
+		t.Error("the status menu should name the Mine view")
+	}
+
+	filtered := a.Get("/issues?env=staging&range=7d").Body
+	list := results(filtered)
+	for _, want := range []string{`class="filter-chips"`, `staging`, `7 days`, `href="/issues?range=7d"`, `href="/issues?env=staging"`} {
+		if !contains(list, want) {
+			t.Errorf("filtered list is missing chip markup %q", want)
+		}
+	}
+	if !contains(filtered, `class="menu-count">2<`) {
+		t.Error("the Filters button should count two active filters")
+	}
+
+	// Bulk actions need an action.
+	id := issueIDFor(t, a, "TypeError")
+	if bad := a.PostForm("/issues/bulk", url.Values{"id": {id}, "operation": {""}, "next": {"/issues"}}, a.CSRF("/issues")); bad.StatusCode != http.StatusBadRequest {
+		t.Errorf("bulk action without an operation: %d", bad.StatusCode)
+	}
+	reopened := a.PostForm("/issues/bulk", url.Values{"id": {id}, "operation": {"ignored"}, "next": {"/issues"}}, a.CSRF("/issues"))
+	if reopened.StatusCode != http.StatusOK || !contains(results(a.Get("/issues?status=ignored").Body), "TypeError") {
+		t.Fatal("bulk ignore did not apply")
+	}
+	if a.PostForm("/issues/bulk", url.Values{"id": {id}, "operation": {"unresolved"}, "next": {"/issues"}}, a.CSRF("/issues")); !contains(results(a.Get("/issues").Body), "TypeError") {
+		t.Fatal("bulk reopen did not apply")
+	}
+}
+
+func TestIssueFragmentRefreshesMenusOutOfBand(t *testing.T) {
+	t.Parallel()
+	a := appWithIssues(t)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, a.Server.URL+"/issues?q=TypeError&env=staging", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("HX-Target", "issue-results")
+	body := testutil.Do(t, a.Client, req).Body
+
+	for _, want := range []string{
+		`id="issue-tabs" class="issue-tabs" aria-label="Issue type" hx-swap-oob="true"`,
+		`id="issue-status-menu" class="menu status-menu" data-menu hx-swap-oob="true"`,
+		`id="issue-filter-count" class="menu-count" hx-swap-oob="true">1<`,
+		`href="/issues?env=staging&amp;q=TypeError&amp;status=resolved"`, // status links keep the new search
+	} {
+		if !contains(body, want) {
+			t.Errorf("fragment is missing %q", want)
+		}
+	}
+	if full := a.Get("/issues"); contains(full.Body, "hx-swap-oob") {
+		t.Error("a full page should not carry out-of-band swaps")
+	}
+}

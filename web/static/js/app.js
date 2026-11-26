@@ -118,13 +118,54 @@
 
   // Issue bulk actions use associated checkboxes so the table can remain
   // semantic and the action bar can stay above the horizontally scrollable table.
+  function bulkBoxes(form) {
+    return document.querySelectorAll('input[type="checkbox"][form="' + CSS.escape(form.id) + '"][name="id"]');
+  }
+  // Show how many issues are selected; the action needs at least one.
+  function syncBulk() {
+    document.querySelectorAll("form[data-bulk]").forEach(function (form) {
+      var boxes = bulkBoxes(form), n = 0;
+      boxes.forEach(function (box) { if (box.checked) n++; });
+      var count = form.querySelector("[data-bulk-count]");
+      if (count) {
+        count.textContent = " · " + n + " selected";
+        count.hidden = n === 0;
+      }
+      form.querySelectorAll("[data-bulk-control]").forEach(function (el) { el.disabled = n === 0; });
+      var master = document.querySelector('[data-select-all="' + CSS.escape(form.id) + '"]');
+      if (master) {
+        master.checked = n > 0 && n === boxes.length;
+        master.indeterminate = n > 0 && n < boxes.length;
+      }
+    });
+  }
   document.addEventListener("change", function (e) {
     var master = e.target.closest && e.target.closest("[data-select-all]");
-    if (!master) return;
-    var form = document.getElementById(master.getAttribute("data-select-all"));
-    if (!form) return;
-    document.querySelectorAll('input[type="checkbox"][form="' + CSS.escape(form.id) + '"][name="id"]').forEach(function (box) {
-      box.checked = master.checked;
+    if (master) {
+      var form = document.getElementById(master.getAttribute("data-select-all"));
+      if (form) bulkBoxes(form).forEach(function (box) { box.checked = master.checked; });
+    }
+    if (master || (e.target.name === "id" && e.target.form && e.target.form.hasAttribute("data-bulk"))) syncBulk();
+  });
+  document.addEventListener("htmx:afterSettle", syncBulk);
+  syncBulk();
+
+  // <details data-menu> dropdowns close on Escape, on a click outside, and
+  // when another menu opens.
+  function closeMenus(except) {
+    document.querySelectorAll("details[data-menu][open]").forEach(function (m) {
+      if (m !== except) m.removeAttribute("open");
     });
+  }
+  document.addEventListener("click", function (e) {
+    closeMenus(e.target.closest && e.target.closest("details[data-menu]"));
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var open = document.querySelector("details[data-menu][open]");
+    if (!open) return;
+    open.removeAttribute("open");
+    var summary = open.querySelector("summary");
+    if (summary) summary.focus();
   });
 })();

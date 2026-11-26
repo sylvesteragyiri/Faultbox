@@ -181,6 +181,127 @@ func (f issueForm) AssignedURL(assigned string) string {
 	return f.url()
 }
 
+// statusOption is one entry in the issue list's status menu.
+type statusOption struct {
+	Label   string
+	URL     string
+	Current bool
+	Divider bool // starts a new group in the menu
+}
+
+var statusLabels = map[string]string{
+	store.IssueUnresolved: "Open",
+	store.IssueResolved:   "Resolved",
+	store.IssueIgnored:    "Ignored",
+	"all":                 "All status",
+}
+
+// StatusLabel names the list's status and assignee view for the menu button.
+func (f issueForm) StatusLabel() string {
+	var who string
+	switch f.Assigned {
+	case "mine":
+		who = "Mine"
+	case "unassigned":
+		who = "Unassigned"
+	}
+	switch {
+	case who == "":
+		return statusLabels[f.Status]
+	case f.Status == store.IssueUnresolved:
+		return who
+	default:
+		return who + " · " + statusLabels[f.Status]
+	}
+}
+
+// StatusOptions lists the status menu: open work first, then by status.
+func (f issueForm) StatusOptions() []statusOption {
+	status := func(s string) bool { return f.Assigned == "" && f.Status == s }
+	return []statusOption{
+		{Label: "Open", URL: f.StatusURL(store.IssueUnresolved), Current: status(store.IssueUnresolved)},
+		{Label: "Unassigned", URL: f.AssignedURL("unassigned"), Current: f.Assigned == "unassigned"},
+		{Label: "Mine", URL: f.AssignedURL("mine"), Current: f.Assigned == "mine"},
+		{Label: "Resolved", URL: f.StatusURL(store.IssueResolved), Current: status(store.IssueResolved), Divider: true},
+		{Label: "Ignored", URL: f.StatusURL(store.IssueIgnored), Current: status(store.IssueIgnored)},
+		{Label: "All status", URL: f.StatusURL("all"), Current: status("all")},
+	}
+}
+
+// filterChip is one applied filter, shown with a link that removes it.
+type filterChip struct {
+	Label     string
+	Value     string
+	RemoveURL string
+}
+
+var rangeLabels = map[string]string{"24h": "24 hours", "7d": "7 days", "30d": "30 days", "90d": "90 days"}
+
+// ActiveFilters lists the filters from the Filters menu that are applied.
+// Search, status and category have their own controls and stay out.
+func (f issueForm) ActiveFilters(projects []store.Project) []filterChip {
+	f.Page = 1
+	var chips []filterChip
+	if f.ProjectSet() {
+		name := "All projects"
+		for _, p := range projects {
+			if strconv.FormatInt(p.ID, 10) == f.Project {
+				name = p.Name
+			}
+		}
+		g := f
+		g.Project = f.scope.Project()
+		chips = append(chips, filterChip{"Project", name, g.url()})
+	}
+	if f.EnvSet() {
+		name := f.Env
+		if name == "" {
+			name = "Any environment"
+		}
+		g := f
+		g.Env = f.scope.Env
+		chips = append(chips, filterChip{"Environment", name, g.url()})
+	}
+	if f.Release != "" {
+		g := f
+		g.Release = ""
+		chips = append(chips, filterChip{"Release", f.Release, g.url()})
+	}
+	if f.Type != "" {
+		g := f
+		g.Type = ""
+		short := f.Type
+		if i := strings.LastIndex(short, `\`); i >= 0 {
+			short = short[i+1:]
+		}
+		chips = append(chips, filterChip{"Type", short, g.url()})
+	}
+	if f.Range != "" {
+		g := f
+		g.Range = ""
+		chips = append(chips, filterChip{"Seen in", rangeLabels[f.Range], g.url()})
+	}
+	return chips
+}
+
+// FilterCount is how many filters from the Filters menu are applied.
+func (f issueForm) FilterCount() int {
+	n := 0
+	for _, set := range []bool{f.ProjectSet(), f.EnvSet(), f.Release != "", f.Type != "", f.Range != ""} {
+		if set {
+			n++
+		}
+	}
+	return n
+}
+
+// ClearFiltersURL drops the Filters menu's filters, keeping search, status,
+// category and sort.
+func (f issueForm) ClearFiltersURL() string {
+	f.Project, f.Env, f.Release, f.Type, f.Range, f.Page = f.scope.Project(), f.scope.Env, "", "", "", 1
+	return f.url()
+}
+
 // Filtered reports whether anything beyond the defaults is applied.
 func (f issueForm) Filtered() bool {
 	return f.ProjectSet() || f.EnvSet() || f.Release != "" || f.Type != "" || f.Q != "" || f.Range != "" ||
@@ -246,9 +367,13 @@ func (h *Handler) issueList(w http.ResponseWriter, r *http.Request) {
 		"Last":          (page.Page-1)*page.PerPage + len(page.Issues),
 		"CurrentUserID": h.userID(r),
 	}
-	pg := h.newPage(r, "Issues", "issues", data)
 	// Filter changes swap only the results; the browser URL follows (hx-push-url).
-	if isHTMX(r) && r.Header.Get("HX-Target") == "issue-results" {
+	// The partial also refreshes the tabs, status menu and filter count
+	// out of band, so their links keep the new search and filters.
+	partial := isHTMX(r) && r.Header.Get("HX-Target") == "issue-results"
+	data["Partial"] = partial
+	pg := h.newPage(r, "Issues", "issues", data)
+	if partial {
 		h.render(w, http.StatusOK, "issues", "issue_results", pg)
 		return
 	}
