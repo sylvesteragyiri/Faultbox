@@ -18,6 +18,7 @@ import (
 	"github.com/sylvesteragyiri/faultbox/internal/ingest"
 	"github.com/sylvesteragyiri/faultbox/internal/notify"
 	"github.com/sylvesteragyiri/faultbox/internal/redismon"
+	"github.com/sylvesteragyiri/faultbox/internal/retention"
 	"github.com/sylvesteragyiri/faultbox/internal/server"
 	"github.com/sylvesteragyiri/faultbox/internal/store"
 )
@@ -33,6 +34,9 @@ type App struct {
 	notifier    *notify.Notifier
 	redisCancel context.CancelFunc
 	redisDone   chan struct{}
+	sweeper     *retention.Sweeper
+	sweepCancel context.CancelFunc
+	sweepDone   chan struct{}
 	handler     http.Handler
 	closed      bool
 }
@@ -58,6 +62,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	}
 
 	a := &App{cfg: cfg, logger: logger, store: st, metrics: &ingest.Metrics{}}
+	a.sweeper = retention.New(st, logger, cfg.ShortRetentionHours, cfg.RetentionDays)
 	a.queue = ingest.NewQueue(cfg.QueueSize, cfg.QueueMaxBytes)
 	a.notifier = notify.New(notify.Options{
 		Store: st, Logger: logger, Key: keys.Encryption, PublicURL: cfg.PublicURL, Version: version,
@@ -71,19 +76,20 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 	}
 
 	dash, err := dashboard.New(dashboard.Options{
-		Store:              st,
-		Logger:             logger,
-		CSRFKey:            keys.CSRF,
-		SessionTTL:         cfg.SessionTTL,
-		TrustProxy:         cfg.TrustProxy,
-		Version:            version,
-		RetentionDays:      cfg.RetentionDays,
-		PublicURL:          cfg.PublicURL,
-		TurnstileSiteKey:   cfg.TurnstileSiteKey,
-		TurnstileSecretKey: cfg.TurnstileSecretKey,
-		Metrics:            func() ingest.Snapshot { return a.metrics.Snapshot(a.queue) },
-		EncryptionKey:      keys.Encryption,
-		Notifier:           a.notifier,
+		Store:               st,
+		Logger:              logger,
+		CSRFKey:             keys.CSRF,
+		SessionTTL:          cfg.SessionTTL,
+		TrustProxy:          cfg.TrustProxy,
+		Version:             version,
+		RetentionDays:       cfg.RetentionDays,
+		ShortRetentionHours: cfg.ShortRetentionHours,
+		PublicURL:           cfg.PublicURL,
+		TurnstileSiteKey:    cfg.TurnstileSiteKey,
+		TurnstileSecretKey:  cfg.TurnstileSecretKey,
+		Metrics:             func() ingest.Snapshot { return a.metrics.Snapshot(a.queue) },
+		EncryptionKey:       keys.Encryption,
+		Notifier:            a.notifier,
 	})
 	if err != nil {
 		_ = st.Close()
@@ -115,13 +121,19 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger, version st
 		return nil, err
 	}
 	a.processor.Start()
-	collector := redismon.New(st, keys.Encryption, cfg.RetentionDays, logger)
+	collector := redismon.New(st, keys.Encryption, logger)
 	collector.SetAlertSender(a.notifier)
 	redisCtx, redisCancel := context.WithCancel(context.Background())
 	a.redisCancel, a.redisDone = redisCancel, make(chan struct{})
 	go func() {
 		defer close(a.redisDone)
 		collector.Run(redisCtx)
+	}()
+	sweepCtx, sweepCancel := context.WithCancel(context.Background())
+	a.sweepCancel, a.sweepDone = sweepCancel, make(chan struct{})
+	go func() {
+		defer close(a.sweepDone)
+		a.sweeper.Run(sweepCtx)
 	}()
 	return a, nil
 }
@@ -147,6 +159,9 @@ func (a *App) FlushNotifications(ctx context.Context) error {
 	return a.notifier.Flush(ctx)
 }
 
+// Sweep runs the retention sweep now. Tests use it.
+func (a *App) Sweep(ctx context.Context) (map[string]int64, error) { return a.sweeper.Sweep(ctx) }
+
 // NotifyStats returns the notifier's counters.
 func (a *App) NotifyStats() notify.Snapshot { return a.notifier.Stats() }
 
@@ -169,6 +184,11 @@ func (a *App) Shutdown(ctx context.Context) error {
 			<-a.redisDone
 			redisErr = ctx.Err()
 		}
+	}
+	if a.sweepCancel != nil {
+		// A sweep stops between batches; wait for it to leave the database.
+		a.sweepCancel()
+		<-a.sweepDone
 	}
 	// After the processor: alerts for the last stored events are recorded
 	// first. Anything not yet delivered stays pending for the next start.

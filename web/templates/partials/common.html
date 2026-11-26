@@ -16,6 +16,8 @@
 
 {{define "job_kind"}}{{if eq . "attempt"}}<span class="badge badge-warn" title="A retry failed; the job will run again">Retry</span>{{else if eq . "manual"}}<span class="badge badge-off" title="The job called $this->fail()">Manual</span>{{else}}<span class="badge badge-off" title="Out of retries; the job won't run again">Terminal</span>{{end}}{{end}}
 
+{{define "job_outcome"}}{{if eq . "succeeded"}}<span class="badge badge-ok">Succeeded</span>{{else if eq . "released"}}<span class="badge badge-warn" title="It threw and will run again">Retried</span>{{else if eq . "timed_out"}}<span class="badge badge-off" title="It ran past its timeout">Timed out</span>{{else}}<span class="badge badge-off" title="It won't run again">Failed</span>{{end}}{{end}}
+
 {{define "theme_switch"}}<div class="theme-switch" role="group" aria-label="Color theme">
   <button type="button" data-theme-set="system" aria-pressed="true" title="Match system">{{template "icon" "monitor"}}<span class="sr-only">System</span></button>
   <button type="button" data-theme-set="light" aria-pressed="false" title="Light">{{template "icon" "sun"}}<span class="sr-only">Light</span></button>

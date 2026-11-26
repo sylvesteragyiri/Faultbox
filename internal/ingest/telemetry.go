@@ -25,6 +25,10 @@ const (
 	maxCommandDuration   = 7 * 24 * time.Hour
 	maxCacheKeyLen       = 200
 	maxCacheCount        = 1_000_000_000
+	maxQueueNameLen      = 255
+	maxJobIDLen          = 64
+	maxJobAttempt        = 1_000_000
+	maxJobWait           = 366 * 24 * time.Hour // delayed jobs wait as long as they were delayed
 )
 
 // TelemetryBatch is the body of POST /api/v1/telemetry (and of the older
@@ -40,6 +44,7 @@ type TelemetryBatch struct {
 	Mails         []MailItem         `json:"mails"`
 	Commands      []CommandItem      `json:"commands"`
 	Cache         []CacheItem        `json:"cache"`
+	Jobs          []JobItem          `json:"jobs"`
 }
 
 // NotificationItem is one Laravel notification on one channel.
@@ -89,6 +94,27 @@ type CacheItem struct {
 	Failures  int64  `json:"failures"` // failed writes and deletes
 }
 
+// JobItem is one attempt of one queued job, successful ones included.
+// Never the payload, constructor arguments or tags: only what identifies
+// the job class and how the attempt went.
+type JobItem struct {
+	ID            string `json:"id"`     // this attempt
+	UUID          string `json:"uuid"`   // the job's payload UUID, shared by its attempts
+	JobID         string `json:"job_id"` // the queue's job ID, as sent with a failed job
+	Attempt       int    `json:"attempt"`
+	MaxTries      *int   `json:"max_tries"`
+	Job           string `json:"job"`  // displayName: the notification, mailable or listener, not the wrapper
+	Kind          string `json:"kind"` // job, notification, mail, listener or broadcast
+	Queue         string `json:"queue"`
+	Connection    string `json:"connection"`
+	Outcome       string `json:"outcome"` // succeeded, released, failed or timed_out
+	DurationMs    *int64 `json:"duration_ms"`
+	WaitMs        *int64 `json:"wait_ms"` // from dispatch to start; absent when unknown
+	StartedAt     string `json:"started_at"`
+	CorrelationID string `json:"correlation_id"`
+	BatchID       string `json:"batch_id"` // Laravel job batch (Bus::batch)
+}
+
 // ItemError says why something failed.
 type ItemError struct {
 	Type    string `json:"type"`
@@ -128,10 +154,10 @@ func ValidateTelemetry(b *TelemetryBatch, allowedEnvs []string, now time.Time) (
 		v.fail("environment", "%q is not configured for this project (allowed: %s)", env, strings.Join(allowedEnvs, ", "))
 	}
 	release := truncate(strings.TrimSpace(b.Release), 200)
-	if len(b.Notifications)+len(b.Mails)+len(b.Commands)+len(b.Cache) == 0 {
-		v.fail("notifications", "the batch must contain at least one notification, mail, command or cache entry")
+	if len(b.Notifications)+len(b.Mails)+len(b.Commands)+len(b.Cache)+len(b.Jobs) == 0 {
+		v.fail("notifications", "the batch must contain at least one notification, mail, command, cache entry or job run")
 	}
-	for name, n := range map[string]int{"notifications": len(b.Notifications), "mails": len(b.Mails), "commands": len(b.Commands), "cache": len(b.Cache)} {
+	for name, n := range map[string]int{"notifications": len(b.Notifications), "mails": len(b.Mails), "commands": len(b.Commands), "cache": len(b.Cache), "jobs": len(b.Jobs)} {
 		if n > MaxItemsPerList {
 			v.fail(name, "may contain at most %d items", MaxItemsPerList)
 		}
@@ -223,10 +249,90 @@ func ValidateTelemetry(b *TelemetryBatch, allowedEnvs []string, now time.Time) (
 		}
 		out.Cache = append(out.Cache, c)
 	}
+	for i, it := range b.Jobs {
+		if v.full() {
+			break
+		}
+		out.Jobs = append(out.Jobs, v.job(i, it, env, release))
+	}
 	if len(v.errs) > 0 {
 		return store.TelemetryBatch{}, &ValidationError{Fields: v.errs}
 	}
 	return out, nil
+}
+
+// job validates one job run.
+func (v *telemetryValidator) job(i int, it JobItem, env, release string) store.NewJobRun {
+	at := func(f string) string { return fmt.Sprintf("jobs[%d].%s", i, f) }
+	j := store.NewJobRun{Environment: env, Release: release}
+	j.UUID = v.id(at("id"), it.ID)
+	if it.UUID != "" {
+		j.JobUUID = v.id(at("uuid"), it.UUID)
+	}
+	if it.BatchID != "" {
+		j.BatchID = v.id(at("batch_id"), it.BatchID)
+	}
+	if it.JobID != "" && !printableToken(it.JobID, maxJobIDLen) {
+		v.fail(at("job_id"), "must be 1 to %d printable characters without spaces", maxJobIDLen)
+	}
+	j.JobID = it.JobID
+	if it.Attempt < 1 || it.Attempt > maxJobAttempt {
+		v.fail(at("attempt"), "must be from 1 to %d", maxJobAttempt)
+	}
+	j.Attempt = it.Attempt
+	if it.MaxTries != nil && (*it.MaxTries < 0 || *it.MaxTries > maxJobAttempt) {
+		v.fail(at("max_tries"), "must be from 0 to %d", maxJobAttempt)
+	}
+	j.MaxTries = it.MaxTries
+	// Only a class name (or Closure) is accepted, so free text such as an
+	// email address in a custom displayName can't be stored (PRD §8).
+	j.JobName = v.class(at("job"), it.Job, false)
+	j.Kind = it.Kind
+	if j.Kind == "" {
+		j.Kind = "job"
+	}
+	if !slices.Contains(store.JobKinds, j.Kind) {
+		v.fail(at("kind"), "must be one of %s", strings.Join(store.JobKinds, ", "))
+	}
+	for _, f := range []struct {
+		name, val string
+		dst       *string
+	}{{"queue", it.Queue, &j.Queue}, {"connection", it.Connection, &j.Connection}} {
+		if f.val != "" && !printableToken(f.val, maxQueueNameLen) {
+			v.fail(at(f.name), "must be 1 to %d printable characters without spaces", maxQueueNameLen)
+		}
+		*f.dst = f.val
+	}
+	if !slices.Contains(store.JobOutcomes, it.Outcome) {
+		v.fail(at("outcome"), "must be one of %s", strings.Join(store.JobOutcomes, ", "))
+	}
+	j.Outcome = it.Outcome
+	switch {
+	case it.DurationMs == nil:
+		v.fail(at("duration_ms"), "is required")
+	case *it.DurationMs < 0 || *it.DurationMs > maxCommandDuration.Milliseconds():
+		v.fail(at("duration_ms"), "must be from 0 to %d", maxCommandDuration.Milliseconds())
+	default:
+		j.DurationMs = *it.DurationMs
+	}
+	if it.WaitMs != nil {
+		if *it.WaitMs < 0 || *it.WaitMs > maxJobWait.Milliseconds() {
+			v.fail(at("wait_ms"), "must be from 0 to %d", maxJobWait.Milliseconds())
+		}
+		j.WaitMs = it.WaitMs
+	}
+	j.StartedAt = v.timestamp(at("started_at"), it.StartedAt)
+	j.CorrelationID = truncate(strings.TrimSpace(it.CorrelationID), 200)
+	return j
+}
+
+// printableToken reports whether s is 1 to n bytes of printable UTF-8 with
+// no whitespace: a queue or connection name, or a job ID.
+func printableToken(s string, n int) bool {
+	if s == "" || len(s) > n || !utf8.ValidString(s) {
+		return false
+	}
+	return strings.IndexFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) < 0
 }
 
 // telemetryValidator collects field errors, stopping at 20: enough to fix

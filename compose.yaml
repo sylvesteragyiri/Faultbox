@@ -27,6 +27,7 @@ services:
 
       # Limits and logging
       FAULTBOX_RETENTION_DAYS: ${FAULTBOX_RETENTION_DAYS:-30}
+      FAULTBOX_SHORT_RETENTION_HOURS: ${FAULTBOX_SHORT_RETENTION_HOURS:-48}
       FAULTBOX_LOG_LEVEL: ${FAULTBOX_LOG_LEVEL:-info}
     volumes:
       - faultbox-data:/data

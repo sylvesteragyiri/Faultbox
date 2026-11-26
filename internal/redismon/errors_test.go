@@ -54,7 +54,7 @@ func TestCollectorSendsOneAlertForAJumpPastSeveralThresholds(t *testing.T) {
 		t.Fatal(err)
 	}
 	alerts := &alertCapture{}
-	c := New(st, key, 30, nil)
+	c := New(st, key, nil)
 	c.SetAlertSender(alerts)
 	for _, used := range []int64{700, 1000} {
 		values <- used
@@ -84,7 +84,7 @@ func TestCollectorStoresAReadableFailureReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := New(st, key, 30, nil).Poll(ctx); err == nil {
+	if err := New(st, key, nil).Poll(ctx); err == nil {
 		t.Fatal("expected the failed check to be reported")
 	}
 	target, err := st.RedisTarget(ctx, id)

@@ -1,11 +1,157 @@
 {{define "content"}}
-<header class="page-head"><div><h1>Jobs</h1><p class="page-sub">Successful and failed queue job runs across your projects.</p></div></header>
-<section class="stats job-run-stats" aria-label="Job run summary">
-  <div class="stat card"><span class="stat-label">Total runs</span><span class="stat-value muted">—</span><span class="stat-note">Waiting for job run telemetry</span></div>
-  <div class="stat card"><span class="stat-label">Succeeded</span><span class="stat-value muted">—</span><span class="stat-note">Successful jobs will appear here</span></div>
-  {{with .Data}}<a class="stat card stat-link" href="{{.FailedURL}}"><span class="stat-icon tone-danger">{{template "icon" "queue"}}</span><span class="stat-label">Failed</span><span class="stat-value">{{compact .Failed.Failures}}</span><span class="stat-note">Last {{.Days}} days{{if .Failed.Attempts}} · <span class="nowrap">{{compact .Failed.Attempts}} failed {{if eq .Failed.Attempts 1}}retry{{else}}retries{{end}}</span>{{end}} · from Queue Failures</span></a>{{end}}
+{{with .Data}}
+{{$f := .Form}}
+<header class="page-head">
+  <div>
+    <h1>Jobs</h1>
+    <p class="page-sub">Every queue job your app ran{{with .ScopeName}} in {{.}}{{end}}{{with .Env}} ({{.}}){{end}}, successful ones included. Each attempt counts as a run.</p>
+  </div>
+  <div class="row"><a class="btn" href="{{.FailedURL}}">Failed jobs</a></div>
+</header>
+
+{{if .Summary.Runs}}
+<section class="stats" aria-label="Job run summary">
+  <div class="stat card"><span class="stat-icon tone-info">{{template "icon" "queue"}}</span><span class="stat-label">Runs</span><span class="stat-value">{{compact .Summary.Runs}}</span><span class="stat-note">Last {{.Range}} days</span></div>
+  <div class="stat card"><span class="stat-icon tone-accent">{{template "icon" "activity"}}</span><span class="stat-label">Success rate</span><span class="stat-value">{{.Summary.SuccessPercent}}%</span><span class="stat-note">{{compact .Summary.Failed}} failed · {{compact .Summary.Released}} retried{{if .Summary.TimedOut}} · {{compact .Summary.TimedOut}} timed out{{end}}</span></div>
+  <div class="stat card"><span class="stat-icon tone-warn">{{template "icon" "clock"}}</span><span class="stat-label">p95 duration</span><span class="stat-value stat-sm">{{duration .Summary.P95Ms}}</span><span class="stat-note">Average {{duration .Summary.AvgMs}} · approximate</span></div>
+  <div class="stat card"><span class="stat-icon tone-danger">{{template "icon" "layers"}}</span><span class="stat-label">p95 queue wait</span>{{if .Summary.Waited}}<span class="stat-value stat-sm">{{duration .Summary.P95WaitMs}}</span><span class="stat-note">Dispatch to start · average {{duration .Summary.AvgWaitMs}}</span>{{else}}<span class="stat-value muted">—</span><span class="stat-note">Needs jobs dispatched by an app with the Faultbox package</span>{{end}}</div>
 </section>
-<section class="card job-run-placeholder">
-  <div class="empty-state"><span class="empty-mark">{{template "icon" "queue"}}</span><h2>No job run data yet</h2><p>Run history, duration, attempts and successful jobs will appear after M10 telemetry is enabled.</p><a class="btn btn-sm" href="/queue-failures">View existing failed jobs</a></div>
+
+<section class="card">
+  <div class="section-head">
+    <h2>Runs per day</h2>
+    <nav class="seg" aria-label="Range">
+      <a href="{{$f.RangeURL 7}}" {{if eq .Range 7}}aria-current="true"{{end}}>7 days</a>
+      <a href="{{$f.RangeURL 14}}" {{if eq .Range 14}}aria-current="true"{{end}}>14 days</a>
+      <a href="{{$f.RangeURL 30}}" {{if eq .Range 30}}aria-current="true"{{end}}>30 days</a>
+    </nav>
+  </div>
+  {{template "bar_chart" .Chart}}
+</section>
+
+<section class="card table-wrap">
+  <div class="section-head table-title"><h2>By job and queue</h2><span class="muted small">failing first</span></div>
+  <table>
+    <thead><tr><th>Job</th><th class="hide-sm">Queue</th><th class="num">Runs</th><th class="num">Failed</th><th class="num hide-sm">Retried</th><th class="num hide-sm">p95</th><th class="num hide-sm">p95 wait</th><th>Last run</th></tr></thead>
+    <tbody>
+    {{range .Stats}}
+      <tr>
+        <td class="issue-cell">{{if eq .JobName $.Data.OtherName}}<span class="issue-title" title="More than 1,000 job names in a day; the rest are counted here">{{.JobName}}</span>{{else}}<a class="issue-title" href="{{$f.JobURL .JobName .Queue}}" title="{{.JobName}}">{{classShort .JobName}}</a>{{end}}
+          <div class="muted small mono truncate">{{classNamespace .JobName}}{{if ne .Kind "job"}} · {{.Kind}}{{end}}</div></td>
+        <td class="hide-sm mono small">{{if .Queue}}{{.Queue}}{{else}}<span class="muted">—</span>{{end}}{{if .Connection}}<div class="muted">{{.Connection}}</div>{{end}}</td>
+        <td class="num">{{compact .Runs}}</td>
+        <td class="num">{{if or .Failed .TimedOut}}<strong class="error-text">{{compact (addInt .Failed .TimedOut)}}</strong>{{else}}<span class="muted">0</span>{{end}}</td>
+        <td class="num hide-sm">{{if .Released}}{{compact .Released}}{{else}}<span class="muted">0</span>{{end}}</td>
+        <td class="num nowrap hide-sm">{{duration .P95Ms}}</td>
+        <td class="num nowrap hide-sm">{{if .Waited}}{{duration .P95WaitMs}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="nowrap"><time datetime="{{isoTime .LastRunAt}}" title="{{datetime .LastRunAt}}" class="muted">{{timeago .LastRunAt}}</time> {{template "job_outcome" .LastOutcome}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <p class="muted small chart-note">Durations and waits are approximate percentiles from bucketed counts.</p>
+</section>
+
+<form class="filter-bar" id="runs" method="get" action="/jobs"
+      hx-get="/jobs" hx-target="#run-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change, submit">
+  {{if ne .Range 30}}<input type="hidden" name="range" value="{{.Range}}d">{{end}}
+  <div class="filter-row">
+    <fieldset class="seg seg-radio">
+      <legend class="sr-only">Outcome</legend>
+      <label><input type="radio" name="outcome" value="" {{if eq $f.Outcome ""}}checked{{end}}><span>All</span></label>
+      {{range .Outcomes}}<label><input type="radio" name="outcome" value="{{.}}" {{if eq $f.Outcome .}}checked{{end}}><span>{{outcome .}}</span></label>{{end}}
+    </fieldset>
+  </div>
+  <div class="pill-row">
+    <label class="pill{{if $f.Job}} is-set{{end}}"><span class="sr-only">Job class</span>
+      <select name="job">
+        <option value="">Any job</option>
+        {{range .Facets.JobNames}}<option value="{{.}}" {{if eq $f.Job .}}selected{{end}}>{{classShort .}}</option>{{end}}
+        {{if and $f.Job (not (hasString .Facets.JobNames $f.Job))}}<option value="{{$f.Job}}" selected>{{classShort $f.Job}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Queue}} is-set{{end}}"><span class="sr-only">Queue</span>
+      <select name="queue">
+        <option value="">Any queue</option>
+        {{range .Facets.Queues}}<option {{if eq $f.Queue .}}selected{{end}}>{{.}}</option>{{end}}
+        {{if and $f.Queue (not (hasString .Facets.Queues $f.Queue))}}<option selected>{{$f.Queue}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Kind}} is-set{{end}}"><span class="sr-only">Kind</span>
+      <select name="kind">
+        <option value="">Any kind</option>
+        {{range .Kinds}}<option {{if eq $f.Kind .}}selected{{end}}>{{.}}</option>{{end}}
+      </select>
+    </label>
+    <label class="pill{{if $f.Since}} is-set{{end}}"><span class="sr-only">Finished</span>
+      <select name="since">
+        <option value="" {{if eq $f.Since ""}}selected{{end}}>Any time</option>
+        <option value="1h" {{if eq $f.Since "1h"}}selected{{end}}>Last hour</option>
+        <option value="24h" {{if eq $f.Since "24h"}}selected{{end}}>Last 24 hours</option>
+        <option value="7d" {{if eq $f.Since "7d"}}selected{{end}}>Last 7 days</option>
+        <option value="30d" {{if eq $f.Since "30d"}}selected{{end}}>Last 30 days</option>
+      </select>
+    </label>
+    {{if $f.Filtered}}<a class="pill-clear" href="{{$f.ClearURL}}">Clear filters</a>{{end}}
+    <noscript><button class="btn btn-sm" type="submit">Apply</button></noscript>
+  </div>
+</form>
+
+{{template "run_results" $}}
+{{else}}
+<section class="card empty">
+  <span class="badge">Nothing yet</span>
+  <h2>See every queue job your app runs</h2>
+  <p class="muted">Update the Laravel package (<code>composer update faultbox/laravel</code>) and every job your workers run is reported, successful ones included, with its duration, attempts and how long it waited in the queue. Queued notifications, mailables, listeners and broadcasts are reported under their own class. Runs are sent in batches; payloads and arguments are never sent.</p>
+  <p class="muted">Already updated? Check that <code>FAULTBOX_JOB_RUNS_ENABLED</code> isn't <code>false</code>, then run a job. Failures reported before then are under <a href="{{.FailedURL}}">Failed jobs</a>{{if .Failed.Failures}} ({{compact .Failed.Failures}} in the last 30 days){{end}}.</p>
+</section>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "run_results"}}
+{{$f := .Data.Form}}
+<section id="run-results" class="card table-wrap" aria-live="polite">
+  <div class="section-head table-title"><h2>Recent runs</h2><span class="muted small">Successful runs are kept for {{.Data.ShortHours}} hours, the rest as long as issues.</span></div>
+  {{if .Data.Runs}}
+  <table class="issues-table">
+    <thead><tr><th>Finished</th><th>Job</th><th>Result</th><th class="num">Attempt</th><th class="num">Duration</th><th class="num hide-sm">Wait</th><th class="hide-sm">Queue</th></tr></thead>
+    <tbody>
+    {{range .Data.Runs}}
+      <tr>
+        <td class="nowrap muted"><time datetime="{{isoTime .FinishedAt}}" title="{{datetime .FinishedAt}}">{{timeago .FinishedAt}}</time></td>
+        <td class="issue-cell"><span class="issue-title" title="{{.JobName}}">{{classShort .JobName}}</span>
+          <div class="muted small mono truncate">{{classNamespace .JobName}}{{if ne .Kind "job"}} · {{.Kind}}{{end}} · {{.ProjectName}} · {{.Environment}}</div>
+          {{if or .FailureEventID .DeliveryURL}}<div class="small">
+            {{if .FailureEventID}}<a href="/queue-failures/{{.FailureEventID}}">Failed job</a> · <a href="/issues/{{.IssueID}}">Issue</a>{{end}}
+            {{if .DeliveryURL}}{{if .FailureEventID}} · {{end}}<a href="{{.DeliveryURL}}">{{if eq .Kind "mail"}}Mail{{else}}Notifications{{end}}</a>{{end}}
+          </div>{{end}}</td>
+        <td>{{template "job_outcome" .Outcome}}</td>
+        <td class="num nowrap">{{.Attempt}}{{if .MaxTries}}<span class="muted"> / {{.MaxTries}}</span>{{end}}</td>
+        <td class="num nowrap">{{duration .DurationMs}}</td>
+        <td class="num nowrap hide-sm">{{if .HasWait}}{{duration .WaitMs}}{{else}}<span class="muted">—</span>{{end}}</td>
+        <td class="hide-sm mono small">{{if .Queue}}{{.Queue}}{{else}}<span class="muted">—</span>{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  <nav class="pager" aria-label="Pages">
+    <span class="muted small">{{.Data.First}}–{{.Data.Last}}</span>
+    <span class="row">
+      {{if gt .Data.Page.Page 1}}<a class="btn" href="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (sub .Data.Page.Page 1)}}" hx-target="#run-results" hx-swap="outerHTML" hx-push-url="true">Previous</a>{{end}}
+      {{if .Data.Page.HasNext}}<a class="btn" href="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-get="{{$f.PageURL (add .Data.Page.Page 1)}}" hx-target="#run-results" hx-swap="outerHTML" hx-push-url="true">Next</a>{{end}}
+    </span>
+  </nav>
+  {{else}}
+  <div class="empty">
+    {{if $f.Filtered}}
+      <h2>No matching runs</h2>
+      <p class="muted">Nothing matches these filters. Successful runs older than {{.Data.ShortHours}} hours aren't kept, but they're still counted above. <a href="{{$f.ClearURL}}">Clear filters</a></p>
+    {{else}}
+      <h2>No runs stored</h2>
+      <p class="muted">Successful runs are kept for {{.Data.ShortHours}} hours and failed or retried ones as long as issues, so older runs only appear in the totals above.</p>
+    {{end}}
+  </div>
+  {{end}}
 </section>
 {{end}}

@@ -50,9 +50,12 @@ func TestRedisTargetSamplesAndRetention(t *testing.T) {
 	if err != nil || len(history) != 1 {
 		t.Fatalf("history = %+v, %v", history, err)
 	}
-	if err := st.PruneRedisSamples(ctx, time.Now().Add(-time.Hour)); err != nil {
+	// The retention sweep removes samples with the issue retention period.
+	st.SetClock(func() time.Time { return time.Now().Add(24 * time.Hour) })
+	if _, err := st.Sweep(ctx, store.Retention{ShortHours: 1, IssueDays: 1}, store.SweepOptions{Pause: -1}); err != nil {
 		t.Fatal(err)
 	}
+	st.SetClock(time.Now)
 	if _, err := st.LatestRedisSample(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("sample survived retention: %v", err)
 	}

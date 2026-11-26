@@ -63,7 +63,8 @@ docker run -d --name faultbox -p 8080:8080   -v faultbox-data:/data   -e FAULTBO
 | `FAULTBOX_PUBLIC_URL` | taken from the request | External URL, shown as the DSN in Laravel setup snippets and used for links in alert emails and webhooks. |
 | `FAULTBOX_TRUST_PROXY` | `false` | Trust `X-Forwarded-For` and `X-Forwarded-Proto`. Enable only behind your own reverse proxy. |
 | `FAULTBOX_TURNSTILE_SITE_KEY` / `FAULTBOX_TURNSTILE_SECRET_KEY` | unset | Optional Cloudflare Turnstile protection for dashboard login. Set both or neither. |
-| `FAULTBOX_RETENTION_DAYS` | `30` | Event retention. Used from M7. |
+| `FAULTBOX_RETENTION_DAYS` | `30` | Issue and history retention, in days: events, failed jobs, failed and retried job runs, failed notifications and mail, command runs, Redis samples and daily rollups. Issue summaries are kept. The Settings page can override it. |
+| `FAULTBOX_SHORT_RETENTION_HOURS` | `48` | Short-lived data retention, 1 to 168 hours, no longer than `FAULTBOX_RETENTION_DAYS`: successful job runs and telemetry batch IDs. The Settings page can override it. |
 | `FAULTBOX_MAX_EVENT_KB` | `256` | Largest event body after decompression. |
 | `FAULTBOX_RATE_LIMIT` / `FAULTBOX_RATE_BURST` | `50` / `200` | Events per second per project, and the burst size. |
 | `FAULTBOX_QUEUE_SIZE` / `FAULTBOX_QUEUE_MAX_MB` | `1000` / `32` | Ingestion queue limits. When either is reached, the API answers `503`. |

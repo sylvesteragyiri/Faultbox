@@ -29,8 +29,13 @@ type Config struct {
 	// X-Forwarded-Proto. Enable it only behind a reverse proxy you control.
 	TrustProxy bool
 
-	RetentionDays int
-	SessionTTL    time.Duration
+	// RetentionDays is how long issues' events and history are kept, and
+	// ShortRetentionHours how long short-lived detail such as successful
+	// job runs is kept. Both are starting values: the Settings page can
+	// override them (store.Retention).
+	RetentionDays       int
+	ShortRetentionHours int
+	SessionTTL          time.Duration
 
 	// AdminEmail and AdminPassword create the first dashboard user on
 	// startup when no users exist yet (D9).
@@ -61,23 +66,24 @@ type Config struct {
 // Load reads configuration using getenv (normally os.Getenv).
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		Port:               or(getenv("FAULTBOX_PORT"), "8080"),
-		DatabasePath:       or(getenv("FAULTBOX_DATABASE_PATH"), "faultbox.db"),
-		Secret:             []byte(getenv("FAULTBOX_SECRET")),
-		AdminEmail:         strings.TrimSpace(getenv("FAULTBOX_ADMIN_EMAIL")),
-		AdminPassword:      getenv("FAULTBOX_ADMIN_PASSWORD"),
-		PublicURL:          strings.TrimSuffix(strings.TrimSpace(getenv("FAULTBOX_PUBLIC_URL")), "/"),
-		TurnstileSiteKey:   strings.TrimSpace(getenv("FAULTBOX_TURNSTILE_SITE_KEY")),
-		TurnstileSecretKey: strings.TrimSpace(getenv("FAULTBOX_TURNSTILE_SECRET_KEY")),
-		RetentionDays:      30,
-		SessionTTL:         7 * 24 * time.Hour,
-		BcryptCost:         12,
-		ShutdownTimeout:    10 * time.Second,
-		QueueSize:          1000,
-		QueueMaxBytes:      32 << 20,
-		RateLimit:          50,
-		RateBurst:          200,
-		MaxEventBytes:      256 << 10,
+		Port:                or(getenv("FAULTBOX_PORT"), "8080"),
+		DatabasePath:        or(getenv("FAULTBOX_DATABASE_PATH"), "faultbox.db"),
+		Secret:              []byte(getenv("FAULTBOX_SECRET")),
+		AdminEmail:          strings.TrimSpace(getenv("FAULTBOX_ADMIN_EMAIL")),
+		AdminPassword:       getenv("FAULTBOX_ADMIN_PASSWORD"),
+		PublicURL:           strings.TrimSuffix(strings.TrimSpace(getenv("FAULTBOX_PUBLIC_URL")), "/"),
+		TurnstileSiteKey:    strings.TrimSpace(getenv("FAULTBOX_TURNSTILE_SITE_KEY")),
+		TurnstileSecretKey:  strings.TrimSpace(getenv("FAULTBOX_TURNSTILE_SECRET_KEY")),
+		RetentionDays:       30,
+		ShortRetentionHours: 48,
+		SessionTTL:          7 * 24 * time.Hour,
+		BcryptCost:          12,
+		ShutdownTimeout:     10 * time.Second,
+		QueueSize:           1000,
+		QueueMaxBytes:       32 << 20,
+		RateLimit:           50,
+		RateBurst:           200,
+		MaxEventBytes:       256 << 10,
 	}
 
 	var errs []error
@@ -113,6 +119,7 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		*dst = n
 	}
+	intVar("FAULTBOX_SHORT_RETENTION_HOURS", 1, 168, &cfg.ShortRetentionHours)
 	intVar("FAULTBOX_QUEUE_SIZE", 1, 1_000_000, &cfg.QueueSize)
 	intVar("FAULTBOX_RATE_LIMIT", 1, 1_000_000, &cfg.RateLimit)
 	intVar("FAULTBOX_RATE_BURST", 1, 1_000_000, &cfg.RateBurst)
@@ -146,6 +153,9 @@ func (c Config) Validate() error {
 	}
 	if c.QueueSize < 1 || c.QueueMaxBytes < 1 || c.RateLimit < 1 || c.RateBurst < 1 || c.MaxEventBytes < 1 {
 		errs = append(errs, errors.New("queue size, queue bytes, rate limit, rate burst and max event size must all be positive"))
+	}
+	if c.RetentionDays > 0 && c.ShortRetentionHours > c.RetentionDays*24 {
+		errs = append(errs, fmt.Errorf("FAULTBOX_SHORT_RETENTION_HOURS (%d) must not be longer than FAULTBOX_RETENTION_DAYS (%d days)", c.ShortRetentionHours, c.RetentionDays))
 	}
 	if c.DatabasePath == "" {
 		errs = append(errs, errors.New("FAULTBOX_DATABASE_PATH must not be empty"))

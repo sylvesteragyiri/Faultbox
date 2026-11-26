@@ -8,10 +8,52 @@
     <dt>Schema version</dt><dd class="mono">{{.SchemaVersion}}</dd>
     <dt>Database</dt><dd class="mono">{{.DatabasePath}}</dd>
     <dt>Database size</dt><dd>{{bytes .DatabaseSize}}</dd>
-    <dt>Event retention</dt><dd>{{.RetentionDays}} days</dd>
     <dt>Dashboard users</dt><dd>{{.Users}}</dd>
   </dl>
   <p class="muted small">Add users with <code>faultbox user create --email …</code>, passing the password on stdin.</p>
+</section>
+
+<section class="card" id="retention">
+  <h2>Retention</h2>
+  <p class="muted small">How long Faultbox keeps what it stores. A sweep every 10 minutes deletes anything older. Issue summaries (title, counts, first and last seen) are always kept; only their events go.</p>
+  {{$r := .Retention}}{{$f := .Form}}
+  <form class="stack" method="post" action="/settings/retention">
+    {{template "csrf" $.CSRF}}
+    {{template "form_error" $f.Error}}
+    {{if $f.Impact}}
+    <div class="alert alert-warn" role="alert">
+      <p><strong>This change deletes about {{compact $f.ImpactTotal}} {{if eq $f.ImpactTotal 1}}row{{else}}rows{{end}} at the next sweep:</strong></p>
+      <ul>{{range $f.Impact}}<li>{{.Label}}: {{compact .Rows}}</li>{{end}}</ul>
+      <p>Deleted data can't be recovered.</p>
+    </div>
+    <input type="hidden" name="confirm" value="1">
+    {{end}}
+    <div class="form-grid">
+      <label>Short-lived data
+        <select name="short_hours">
+          {{range $f.ShortOptions $r $.Data.EnvShortHours}}<option value="{{.}}" {{if $f.Selected .}}selected{{end}}>{{.}} hours</option>{{end}}
+        </select>
+        <span class="hint">Successful job runs and telemetry batch IDs. {{if $r.ShortSaved}}Saved here{{else}}From <code>FAULTBOX_SHORT_RETENTION_HOURS</code>{{end}}: {{$r.ShortHours}} hours (environment: {{$.Data.EnvShortHours}}).</span>
+      </label>
+      <label>Issues and history
+        <input type="number" name="issue_days" value="{{$f.IssueDays}}" min="1" max="3650" step="1" required inputmode="numeric">
+        <span class="hint">Days. Events, failed jobs, failed and retried job runs, failed notifications and mail, command runs, Redis samples and daily rollups. {{if $r.IssueSaved}}Saved here{{else}}From <code>FAULTBOX_RETENTION_DAYS</code>{{end}}: {{$r.IssueDays}} days (environment: {{$.Data.EnvIssueDays}}).</span>
+      </label>
+    </div>
+    <p class="hint">Short-lived data can't be kept longer than issues and history.</p>
+    <div class="row">
+      <button class="btn btn-primary" type="submit">{{if $f.Impact}}Delete and save{{else}}Save retention{{end}}</button>
+      {{if $f.Impact}}<a class="btn btn-ghost" href="/settings#retention">Cancel</a>{{end}}
+      {{if or $r.ShortSaved $r.IssueSaved}}<button class="btn btn-ghost" type="submit" name="reset" value="1">Use the environment's values</button>{{end}}
+    </div>
+  </form>
+  {{if .Sizes}}
+  <h3>Disk used by pruned data</h3>
+  <dl class="details">
+    {{range .Sizes}}<dt>{{.Label}}</dt><dd>{{bytes .Bytes}}</dd>{{end}}
+  </dl>
+  <p class="muted small">Table and index sizes. Job runs grow with queue throughput: about 100 MB per job a second at 48 hours. Lower short-lived retention, or set <code>FAULTBOX_JOB_RUNS_ENABLED=false</code> in the Laravel app, to use less.</p>
+  {{end}}
 </section>
 {{with .Ingest}}
 <section class="card">

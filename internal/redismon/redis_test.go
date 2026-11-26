@@ -131,7 +131,7 @@ func TestCollectorAlertsOnCrossingsOnceAndRearmsAfterDrop(t *testing.T) {
 	}
 
 	alerts := &alertCapture{}
-	c := New(st, key, 30, nil)
+	c := New(st, key, nil)
 	c.SetAlertSender(alerts)
 	for _, used := range []int64{790, 800, 850, 900, 1000, 950, 700, 800} {
 		values <- used

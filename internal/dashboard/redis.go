@@ -199,14 +199,19 @@ func (h *Handler) redisTargetData(w http.ResponseWriter, r *http.Request, id int
 		h.serverError(w, sampleErr)
 		return page{}, false
 	}
-	history, err := h.store.RedisHistory(ctx, id, time.Now().AddDate(0, 0, -h.opts.RetentionDays))
+	policy, err := h.retention(ctx)
+	if err != nil {
+		h.serverError(w, err)
+		return page{}, false
+	}
+	history, err := h.store.RedisHistory(ctx, id, time.Now().AddDate(0, 0, -policy.IssueDays))
 	if err != nil {
 		h.serverError(w, err)
 		return page{}, false
 	}
 	return h.newPage(r, target.Name, "redis", map[string]any{
 		"Target": target, "State": redisStateOf(target), "Latest": latest, "Plot": makeRedisPlot(history),
-		"RetentionDays": h.opts.RetentionDays,
+		"RetentionDays": policy.IssueDays,
 	}), true
 }
 

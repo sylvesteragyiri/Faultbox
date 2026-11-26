@@ -33,26 +33,21 @@ const (
 	pollWorkers = 4
 )
 
-// Collector polls targets at a fixed interval and prunes samples using the
-// configured global retention period.
+// Collector polls targets at a fixed interval. Old samples are deleted by
+// the retention sweep (store.Sweep), with the issue retention period.
 type Collector struct {
-	store         *store.Store
-	key           []byte
-	retentionDays int
-	logger        interface{ Error(string, ...any) }
-	alerts        interface {
+	store  *store.Store
+	key    []byte
+	logger interface{ Error(string, ...any) }
+	alerts interface {
 		RedisMemoryAlert(context.Context, string, int64, int64, int64, int64) error
 	}
 	now func() time.Time
 }
 
-// New returns a collector that unseals endpoints with key. A non-positive
-// retentionDays falls back to 30 days.
-func New(st *store.Store, key []byte, retentionDays int, logger interface{ Error(string, ...any) }) *Collector {
-	if retentionDays < 1 {
-		retentionDays = 30
-	}
-	return &Collector{store: st, key: key, retentionDays: retentionDays, logger: logger, now: time.Now}
+// New returns a collector that unseals endpoints with key.
+func New(st *store.Store, key []byte, logger interface{ Error(string, ...any) }) *Collector {
+	return &Collector{store: st, key: key, logger: logger, now: time.Now}
 }
 
 // SetAlertSender connects threshold crossings to the durable notification queue.
@@ -119,9 +114,6 @@ func (c *Collector) Poll(ctx context.Context) error {
 	close(results)
 	for err := range results {
 		errs = append(errs, err)
-	}
-	if err := c.store.PruneRedisSamples(ctx, c.now().AddDate(0, 0, -c.retentionDays)); err != nil {
-		errs = append(errs, fmt.Errorf("prune Redis history: %w", err))
 	}
 	return errors.Join(errs...)
 }

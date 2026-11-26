@@ -26,13 +26,16 @@ import (
 
 // Options configures the dashboard.
 type Options struct {
-	Store         *store.Store
-	Logger        *slog.Logger
-	CSRFKey       []byte
-	SessionTTL    time.Duration
-	TrustProxy    bool
-	Version       string
-	RetentionDays int
+	Store      *store.Store
+	Logger     *slog.Logger
+	CSRFKey    []byte
+	SessionTTL time.Duration
+	TrustProxy bool
+	Version    string
+	// RetentionDays and ShortRetentionHours are the environment's retention
+	// values; the Settings page can override them (store.Retention).
+	RetentionDays       int
+	ShortRetentionHours int
 	// PublicURL is the address Laravel apps report to, shown in setup snippets.
 	PublicURL string
 	// Turnstile protects dashboard login when both keys are configured.
@@ -147,6 +150,7 @@ func New(opts Options) (*Handler, error) {
 	authed.HandleFunc("POST /notifications/channels/{id}/secret", h.channelRotateSecret)
 	authed.HandleFunc("POST /notifications/history/{id}/retry", h.notificationRetry)
 	authed.HandleFunc("GET /settings", h.settings)
+	authed.HandleFunc("POST /settings/retention", h.settingsRetention)
 	authed.HandleFunc("/", h.notFound)
 	mux.Handle("/", h.requireUser(authed))
 
@@ -217,6 +221,7 @@ func (h *Handler) parseTemplates() error {
 		"compact": compact,
 		"add":     func(a, b int) int { return a + b },
 		"sub":     func(a, b int) int { return a - b },
+		"addInt":  func(a, b int64) int64 { return a + b },
 		"percent": func(part, total int64) int64 {
 			if total <= 0 {
 				return 0
@@ -235,6 +240,7 @@ func (h *Handler) parseTemplates() error {
 		"hasString": slices.Contains[[]string],
 		"lower":     strings.ToLower,
 		"duration":  durationText,
+		"outcome":   outcomeLabel,
 		"signed": func(n int64) string {
 			if n > 0 {
 				return "+" + compact(n)
@@ -469,28 +475,6 @@ type projectCard struct {
 	Project  store.Project
 	Activity store.ProjectActivity
 	Spark    string
-}
-
-func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	version, err := h.store.SchemaVersion(ctx)
-	if err != nil {
-		h.serverError(w, err)
-		return
-	}
-	users, err := h.store.CountUsers(ctx)
-	if err != nil {
-		h.serverError(w, err)
-		return
-	}
-	h.render(w, http.StatusOK, "settings", "", h.newPage(r, "Settings", "settings", map[string]any{
-		"SchemaVersion": version,
-		"DatabasePath":  h.store.Path(),
-		"DatabaseSize":  databaseSize(h.store.Path()),
-		"RetentionDays": h.opts.RetentionDays,
-		"Users":         users,
-		"Ingest":        h.metricsSnapshot(),
-	}))
 }
 
 // ---- small helpers ----

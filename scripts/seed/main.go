@@ -10,10 +10,12 @@
 //	go run ./scripts/seed -db path/to/other.db
 //	go run ./scripts/seed -events 0          # telemetry only
 //	go run ./scripts/seed -telemetry=false   # events only
+//	go run ./scripts/seed -jobs-only         # queue job runs only, e.g. on a database seeded before them
 //
 // Besides events, it adds telemetry for the same projects and days: Laravel
-// notifications, mail, artisan command runs and cache totals, one batch per
-// project and hour, with a short incident in each of the first two projects
+// notifications, mail, artisan command runs, cache totals and queue job runs
+// (successful ones included, with retries, timeouts and queue waits), one
+// batch per project and hour, with a short incident in each of the first two projects
 // (telemetry.go). -telemetry-scale multiplies its volume.
 //
 // It is safe to run while the server is up (SQLite WAL). Running it again
@@ -150,17 +152,21 @@ func main() {
 	total := flag.Int("events", 1500, "number of events to add")
 	days := flag.Int("days", 28, "spread events over this many days (keep under the retention period)")
 	fixtures := flag.String("fixtures", "tests/fixtures/laravel", "directory of Laravel event fixtures")
-	telemetry := flag.Bool("telemetry", true, "also seed notifications, mail, commands and cache")
+	telemetry := flag.Bool("telemetry", true, "also seed notifications, mail, commands, cache and job runs")
 	scale := flag.Float64("telemetry-scale", 1, "multiply the telemetry volume")
+	jobsOnly := flag.Bool("jobs-only", false, "seed only queue job runs: no events and no other telemetry")
 	flag.Parse()
 
-	if err := run(*dbPath, *fixtures, *total, *days, *telemetry, *scale); err != nil {
+	if *jobsOnly {
+		*total, *telemetry = 0, true
+	}
+	if err := run(*dbPath, *fixtures, *total, *days, *telemetry, *scale, *jobsOnly); err != nil {
 		fmt.Fprintln(os.Stderr, "seed:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dbPath, fixtureDir string, total, days int, telemetry bool, scale float64) error {
+func run(dbPath, fixtureDir string, total, days int, telemetry bool, scale float64, jobsOnly bool) error {
 	ctx := context.Background()
 	if days < 1 || total < 0 || scale <= 0 {
 		return fmt.Errorf("-days and -telemetry-scale must be positive, -events zero or more")
@@ -323,11 +329,11 @@ func run(dbPath, fixtureDir string, total, days int, telemetry bool, scale float
 	fmt.Printf("Seeded %d events into %d issues across %d projects (%d days) in %s\n",
 		metrics.Processed.Load(), len(list), len(projects), days, dbPath)
 	if telemetry {
-		batches, items, err := seedTelemetry(ctx, st, rng, days, scale)
+		batches, items, err := seedTelemetry(ctx, st, rng, days, scale, jobsOnly)
 		if err != nil {
 			return fmt.Errorf("seed telemetry: %w", err)
 		}
-		fmt.Printf("Seeded %d telemetry batches (%d notifications, mails, command runs and cache totals)\n", batches, items)
+		fmt.Printf("Seeded %d telemetry batches (%d notifications, mails, command runs, cache totals and job runs)\n", batches, items)
 	}
 	if f := metrics.Failed.Load(); f > 0 || rejected > 0 {
 		fmt.Printf("  %d failed to store, %d rejected by validation\n", f, rejected)

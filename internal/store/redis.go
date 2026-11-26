@@ -230,12 +230,6 @@ func (s *Store) RedisHistory(ctx context.Context, targetID int64, since time.Tim
 	return out, rows.Err()
 }
 
-// PruneRedisSamples deletes samples older than the configured global retention.
-func (s *Store) PruneRedisSamples(ctx context.Context, before time.Time) error {
-	_, err := s.writer.ExecContext(ctx, `DELETE FROM redis_samples WHERE sampled_at < ?`, before.UTC().UnixMilli())
-	return err
-}
-
 // SetRedisTargetEnabled toggles polling without deleting its history.
 func (s *Store) SetRedisTargetEnabled(ctx context.Context, id int64, enabled bool) error {
 	res, err := s.writer.ExecContext(ctx, `UPDATE redis_targets SET enabled = ?, updated_at = ? WHERE id = ?`, enabled, s.nowMs(), id)

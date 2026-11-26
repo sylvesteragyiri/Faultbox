@@ -132,23 +132,22 @@ func TestV2InsightPagesShowHonestEmptyStates(t *testing.T) {
 		}
 	}
 	jobs := a.Get("/jobs")
-	for _, want := range []string{"Jobs", "No job run data yet", "successful jobs", "/queue-failures"} {
+	for _, want := range []string{"Jobs", "See every queue job your app runs", "successful ones included", "/queue-failures"} {
 		if !contains(jobs.Body, want) {
 			t.Errorf("Jobs page is missing %q", want)
 		}
 	}
 }
 
-func TestJobsPageFailedCardUsesQueueFailures(t *testing.T) {
+// Before job runs arrive, the Jobs page points to the failures Faultbox
+// already has instead of inventing run counts.
+func TestJobsPageEmptyStatePointsToQueueFailures(t *testing.T) {
 	t.Parallel()
 	empty := testutil.NewApp(t)
 	empty.LoginAdmin()
 	body := empty.Get("/jobs").Body
-	if !contains(body, `href="/queue-failures/jobs"`) || !contains(body, `<span class="stat-value">0</span>`) || !contains(body, "Last 30 days · from Queue Failures") {
-		t.Error("with no failures the Failed card should show 0 and link to Queue Failures")
-	}
-	if contains(body, "failed retr") {
-		t.Error("no retry note without failed retries")
+	if !contains(body, `href="/queue-failures/jobs"`) || contains(body, "in the last 30 days)") {
+		t.Error("with no failures the empty state links to Failed jobs without a count")
 	}
 
 	a := appWithIssues(t)
@@ -160,11 +159,10 @@ func TestJobsPageFailedCardUsesQueueFailures(t *testing.T) {
 		t.Fatal("fixtures should include failed jobs")
 	}
 	body = a.Get("/jobs").Body
-	if want := `<span class="stat-value">` + strconv.FormatInt(sum.Failures, 10) + `</span>`; !contains(body, want) {
-		t.Errorf("Failed card should show %d failures from Queue Failures", sum.Failures)
+	if want := "(" + strconv.FormatInt(sum.Failures, 10) + " in the last 30 days)"; !contains(body, want) {
+		t.Errorf("empty state should mention the %d failures from Queue Failures", sum.Failures)
 	}
-	// Total and Succeeded still wait for M10 job-run telemetry.
-	if strings.Count(body, `<span class="stat-value muted">—</span>`) != 2 || !contains(body, "No job run data yet") {
-		t.Error("Total runs and Succeeded must stay empty until job runs are collected")
+	if contains(body, "Success rate") || contains(body, `class="stat-value"`) {
+		t.Error("no run numbers until job runs are collected")
 	}
 }

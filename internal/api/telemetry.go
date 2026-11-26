@@ -19,8 +19,8 @@ type TelemetryResponse struct {
 }
 
 // telemetryHandler serves POST /api/v1/telemetry (and its older alias
-// POST /api/v1/notifications): the Laravel notifications, mail and artisan
-// commands one request, job or command produced. It shares the events' rate
+// POST /api/v1/notifications): the Laravel notifications, mail, artisan
+// commands, cache totals and queue job runs one request, job or command produced. It shares the events' rate
 // limit, size limit and error format. A batch is a handful of counter
 // updates, so it is written straight away in one short transaction instead
 // of going through the event queue.
@@ -86,7 +86,7 @@ func (h *Handler) telemetryHandler() http.HandlerFunc {
 		if len(issues) > 0 && o.OnResults != nil {
 			o.OnResults(issues)
 		}
-		resp := TelemetryResponse{Status: "accepted", Count: len(valid.Notifications) + len(valid.Mails) + len(valid.Commands) + len(valid.Cache)}
+		resp := TelemetryResponse{Status: "accepted", Count: len(valid.Notifications) + len(valid.Mails) + len(valid.Commands) + len(valid.Cache) + len(valid.Jobs)}
 		if duplicate {
 			resp.Status = "duplicate"
 		}
