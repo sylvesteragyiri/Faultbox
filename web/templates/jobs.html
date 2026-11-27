@@ -29,6 +29,12 @@
   {{template "bar_chart" .Chart}}
 </section>
 
+<nav id="job-tables" class="issue-tabs job-tabs" aria-label="Job tables">
+  <a href="{{$f.TabURL "jobs"}}" {{if not $f.Attempts}}aria-current="page"{{end}}>By job</a>
+  <a href="{{$f.TabURL "runs"}}" {{if $f.Attempts}}aria-current="page"{{end}}>Attempts</a>
+</nav>
+
+{{if not $f.Attempts}}
 <section class="card table-wrap">
   <div class="section-head table-title"><h2>By job and queue</h2><span class="muted small">failing first</span></div>
   <table>
@@ -49,11 +55,12 @@
     {{end}}
     </tbody>
   </table>
-  <p class="muted small chart-note">Durations and waits are approximate percentiles from bucketed counts.</p>
+  <p class="muted small chart-note">Durations and waits are approximate percentiles from bucketed counts. Select a job to see its attempts.</p>
 </section>
-
-<form class="filter-bar" id="runs" method="get" action="/jobs"
+{{else}}
+<form class="filter-bar" method="get" action="/jobs"
       hx-get="/jobs" hx-target="#run-results" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change, submit">
+  <input type="hidden" name="view" value="runs">
   {{if ne .Range 30}}<input type="hidden" name="range" value="{{.Range}}d">{{end}}
   <div class="filter-row">
     <fieldset class="seg seg-radio">
@@ -98,6 +105,7 @@
 </form>
 
 {{template "run_results" $}}
+{{end}}
 {{else}}
 <section class="card empty">
   <span class="badge">Nothing yet</span>
@@ -112,7 +120,7 @@
 {{define "run_results"}}
 {{$f := .Data.Form}}
 <section id="run-results" class="card table-wrap" aria-live="polite">
-  <div class="section-head table-title"><h2>Recent runs</h2><span class="muted small">Successful runs are kept for {{.Data.ShortHours}} hours, the rest as long as issues.</span></div>
+  <div class="section-head table-title"><h2>Recent attempts</h2><span class="muted small">Successful runs are kept for {{.Data.ShortHours}} hours, the rest as long as issues.</span></div>
   {{if .Data.Runs}}
   <table class="issues-table">
     <thead><tr><th>Finished</th><th>Job</th><th>Result</th><th class="num">Attempt</th><th class="num">Duration</th><th class="num hide-sm">Wait</th><th class="hide-sm">Queue</th></tr></thead>

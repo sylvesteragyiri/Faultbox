@@ -25,9 +25,17 @@ var runRanges = map[string]time.Duration{
 	"30d": 30 * 24 * time.Hour,
 }
 
-// jobRunForm is the recent-runs filter state, from the query string.
+// The Jobs page's two tabs: the per-class table and the attempts list.
+const (
+	jobsViewClasses  = "jobs"
+	jobsViewAttempts = "runs"
+)
+
+// jobRunForm is the Jobs page's state, from the query string: the summary
+// window, the selected tab, and the attempts list's filters.
 type jobRunForm struct {
-	Days    int // the summary's window: 7, 14 or 30
+	Days    int    // the summary's window: 7, 14 or 30
+	View    string // jobsViewClasses or jobsViewAttempts
 	Job     string
 	Queue   string
 	Kind    string
@@ -63,6 +71,19 @@ func parseJobRunForm(r *http.Request, days int) jobRunForm {
 	}
 	f.Page, _ = strconv.Atoi(q.Get("page"))
 	f.Page = max(1, f.Page)
+	// Attempt filters only exist on the attempts tab, so a URL with one
+	// (an older link, or ?outcome=failed typed by hand) opens it.
+	switch q.Get("view") {
+	case jobsViewAttempts:
+		f.View = jobsViewAttempts
+	case jobsViewClasses:
+		f.View = jobsViewClasses
+	default:
+		f.View = jobsViewClasses
+		if f.Filtered() || f.Page > 1 {
+			f.View = jobsViewAttempts
+		}
+	}
 	return f
 }
 
@@ -88,6 +109,9 @@ func (f jobRunForm) values() url.Values {
 	if f.Days != 30 && f.Days != 0 {
 		v.Set("range", strconv.Itoa(f.Days)+"d")
 	}
+	if f.View == jobsViewAttempts {
+		v.Set("view", jobsViewAttempts)
+	}
 	set("job", f.Job)
 	set("queue", f.Queue)
 	set("kind", f.Kind)
@@ -109,22 +133,37 @@ func (f jobRunForm) url() string {
 // PageURL links to another page of the same runs.
 func (f jobRunForm) PageURL(page int) string { f.Page = page; return f.url() }
 
-// JobURL filters the runs to one job class and queue.
+// JobURL opens the attempts tab filtered to one job class and queue.
 func (f jobRunForm) JobURL(job, queue string) string {
-	f.Job, f.Queue, f.Page = job, queue, 1
-	return f.url() + "#runs"
+	f.View, f.Job, f.Queue, f.Page = jobsViewAttempts, job, queue, 1
+	return f.url() + "#job-tables"
 }
 
-// RangeURL changes the summary's window, keeping the filters.
+// RangeURL changes the summary's window, keeping the tab and filters.
 func (f jobRunForm) RangeURL(days int) string { f.Days, f.Page = days, 1; return f.url() }
+
+// Attempts reports whether the attempts tab is selected.
+func (f jobRunForm) Attempts() bool { return f.View == jobsViewAttempts }
+
+// TabURL switches tab, keeping the summary's window. The attempts tab keeps
+// its filters; the per-class table has none.
+func (f jobRunForm) TabURL(view string) string {
+	if view != jobsViewAttempts {
+		return jobRunForm{Days: f.Days, View: jobsViewClasses}.url() + "#job-tables"
+	}
+	f.View, f.Page = jobsViewAttempts, 1
+	return f.url() + "#job-tables"
+}
 
 // Filtered reports whether any recent-runs filter is applied.
 func (f jobRunForm) Filtered() bool {
 	return f.Job != "" || f.Queue != "" || f.Kind != "" || f.Outcome != "" || f.Since != ""
 }
 
-// ClearURL drops the recent-runs filters, keeping the summary's window.
-func (f jobRunForm) ClearURL() string { return jobRunForm{Days: f.Days}.url() + "#runs" }
+// ClearURL drops the attempts list's filters, keeping its tab and the summary's window.
+func (f jobRunForm) ClearURL() string {
+	return jobRunForm{Days: f.Days, View: jobsViewAttempts}.url() + "#job-tables"
+}
 
 // jobRunRow is one recent run with what it links to.
 type jobRunRow struct {
@@ -148,10 +187,13 @@ func (h *Handler) jobsPage(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	page, err := h.store.ListJobRuns(ctx, form.filter(sc, time.Now()))
-	if err != nil {
-		h.serverError(w, err)
-		return
+	// Only the selected tab's table is queried.
+	var page store.JobRunPage
+	if form.Attempts() {
+		if page, err = h.store.ListJobRuns(ctx, form.filter(sc, time.Now())); err != nil {
+			h.serverError(w, err)
+			return
+		}
 	}
 	rows := make([]jobRunRow, len(page.Runs))
 	for i, run := range page.Runs {
@@ -193,12 +235,15 @@ func (h *Handler) jobsPage(w http.ResponseWriter, r *http.Request) {
 		h.serverError(w, err)
 		return
 	}
-	stats, err := h.store.JobRunStats(ctx, sc, days, 50)
-	if err != nil {
-		h.serverError(w, err)
-		return
+	var (
+		stats  []store.JobRunStat
+		facets store.JobRunFacets
+	)
+	if form.Attempts() {
+		facets, err = h.store.JobRunFacets(ctx, sc, days)
+	} else {
+		stats, err = h.store.JobRunStats(ctx, sc, days, 50)
 	}
-	facets, err := h.store.JobRunFacets(ctx, sc, days)
 	if err != nil {
 		h.serverError(w, err)
 		return

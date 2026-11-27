@@ -1134,6 +1134,7 @@ label { font-size: .82rem; gap: .3rem; }
 .issue-tabs { width: fit-content; max-width: 100%; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .issue-tabs a { flex: none; padding: .36rem .65rem; border-radius: 6px; color: var(--text-2); font-size: .78rem; }
 .issue-tabs a[aria-current="page"] { background: var(--surface-3); color: var(--text); font-weight: 600; }
+.job-tabs { margin: 0 0 .75rem; }
 
 /* ---- issue toolbar: search, status and filter menus, sort ---- */
 .issue-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: .8rem 0 .5rem; }

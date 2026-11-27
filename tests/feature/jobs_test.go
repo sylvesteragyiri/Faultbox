@@ -84,7 +84,10 @@ func TestJobRunsAppearOnTheJobsPage(t *testing.T) {
 	for _, want := range []string{
 		"Success rate", "66.7%", "1 failed · 1 retried", // 4 of 6 succeeded, counted once despite the retry
 		"p95 queue wait", "250 ms", "ProcessPodcast", "InvoicePaid", "notification", "Receipt",
-		"Recent runs", "Successful runs are kept for 48 hours",
+		// The per-class table is the default tab.
+		`<nav id="job-tables" class="issue-tabs job-tabs" aria-label="Job tables">`,
+		`<a href="/jobs#job-tables" aria-current="page">By job</a>`, `<a href="/jobs?view=runs#job-tables" >Attempts</a>`,
+		"By job and queue",
 	} {
 		if !contains(body, want) {
 			t.Errorf("Jobs page is missing %q", want)
@@ -93,7 +96,31 @@ func TestJobRunsAppearOnTheJobsPage(t *testing.T) {
 	if strings.Index(body, "ProcessPodcast") > strings.Index(body, "InvoicePaid") {
 		t.Error("the failing job should come first")
 	}
-	results := runResults(body)
+	if contains(body, `id="run-results"`) || contains(body, `name="outcome"`) {
+		t.Error("the attempts list and its filters belong to the Attempts tab only")
+	}
+	// A job in the table opens the Attempts tab filtered to it.
+	if want := `href="/jobs?job=App%5CJobs%5CProcessPodcast&amp;queue=media&amp;view=runs#job-tables"`; !contains(body, want) {
+		t.Errorf("job rows should link to their attempts: want %s", want)
+	}
+
+	attempts := a.Get("/jobs?view=runs").Body
+	for _, want := range []string{
+		`<a href="/jobs?view=runs#job-tables" aria-current="page">Attempts</a>`, `<a href="/jobs#job-tables" >By job</a>`,
+		"Recent attempts", "Successful runs are kept for 48 hours", `<input type="hidden" name="view" value="runs">`,
+	} {
+		if !contains(attempts, want) {
+			t.Errorf("Attempts tab is missing %q", want)
+		}
+	}
+	if contains(attempts, "By job and queue") {
+		t.Error("the per-class table belongs to the By job tab only")
+	}
+	// The summary stays on both tabs, and changing its range keeps the tab.
+	if !contains(attempts, "Success rate") || !contains(attempts, `href="/jobs?range=7d&amp;view=runs"`) {
+		t.Error("the summary and its range links should stay on the Attempts tab")
+	}
+	results := runResults(attempts)
 	if m := regexp.MustCompile(`href="/queue-failures/(\d+)">Failed job</a> · <a href="/issues/(\d+)">Issue</a>`).FindStringSubmatch(results); m == nil {
 		t.Error("the failed run should link to its failed job and issue")
 	}
@@ -119,8 +146,15 @@ func TestJobRunsAppearOnTheJobsPage(t *testing.T) {
 		t.Error("a filter with no runs should say so and offer to clear it")
 	}
 	// Unknown values are ignored rather than matching nothing.
-	if junk := runResults(a.Get("/jobs?outcome=bogus&kind=cron&since=forever").Body); strings.Count(junk, "<tr>") != 7 {
+	if junk := runResults(a.Get("/jobs?view=runs&outcome=bogus&kind=cron&since=forever").Body); strings.Count(junk, "<tr>") != 7 {
 		t.Error("unknown filter values should be ignored")
+	}
+	// Only invalid filters, and no tab chosen: the default tab.
+	if junk := a.Get("/jobs?outcome=bogus").Body; !contains(junk, "By job and queue") {
+		t.Error("invalid filters alone shouldn't switch tabs")
+	}
+	if bad := a.Get("/jobs?view=elsewhere").Body; !contains(bad, "By job and queue") {
+		t.Error("an unknown view falls back to the By job tab")
 	}
 
 	// HTMX filter changes get only the results.
